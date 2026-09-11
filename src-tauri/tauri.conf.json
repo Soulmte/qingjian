@@ -3,7 +3,7 @@
   "productName": "青简",
   "mainBinaryName": "qingjian",
   "version": "0.1.0",
-  "identifier": "com.lq.qingjian",
+  "identifier": "com.soulmte.qingjian",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

@@ -5,7 +5,7 @@
  * 这不是用户设置，而是构建期常量：终端用户不该被要求知道项目托管在哪、
  * 更不该被要求填写地址。
  */
-export const PROJECT_OWNER = "lq";
+export const PROJECT_OWNER = "Soulmte";
 export const PROJECT_NAME = "qingjian";
 
 export const GITHUB_URL = `https://github.com/${PROJECT_OWNER}/${PROJECT_NAME}`;

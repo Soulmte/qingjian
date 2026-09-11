@@ -2,7 +2,8 @@
 name = "qingjian"
 version = "0.1.0"
 description = "青简 - 本地 Markdown 编辑器"
-authors = ["lq"]
+# 这个字段会成为安装包的发布者名，所以用的是发布者，不是代码作者。
+authors = ["Soulmte"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
