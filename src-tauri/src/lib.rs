@@ -18,6 +18,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // 自动更新：端点与公钥在 tauri.conf.json 的 plugins.updater 里
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let app_data_dir = app.path().app_data_dir()?;
 
@@ -90,10 +92,7 @@ pub fn run() {
             commands::upload::test_git_connection,
             commands::fonts::list_system_fonts,
             commands::bootstrap::bootstrap_workspace,
-            commands::update::check_for_updates,
-            commands::update::download_update,
-            commands::update::open_external,
-            commands::update::reveal_downloaded,
+            commands::shell::open_external,
             state::take_startup_notice,
             state::take_open_file,
         ])

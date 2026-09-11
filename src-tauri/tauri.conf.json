@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "青简",
   "mainBinaryName": "qingjian",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.soulmte.qingjian",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -52,6 +53,17 @@
       "wix": {
         "language": ["zh-CN"],
         "upgradeCode": "76718746-ec69-5276-8b16-2662f86e5b52"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Soulmte/qingjian/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNDQzE5QUNBMTI2MzgzQUIKUldTcmcyTVN5cHJCUEkyS0NLSG1mcU9xSmRJek5yZ3RXOGNGV1hpVHM4SzFXNjZZNWc4cEVXOXoK",
+      "windows": {
+        "installMode": "quiet"
       }
     }
   }

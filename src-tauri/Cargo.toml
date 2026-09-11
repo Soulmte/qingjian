@@ -1,6 +1,6 @@
 [package]
 name = "qingjian"
-version = "0.1.1"
+version = "0.1.2"
 description = "青简 - 本地 Markdown 编辑器"
 # 这个字段会成为安装包的发布者名，所以用的是发布者，不是代码作者。
 authors = ["Soulmte"]
@@ -42,6 +42,7 @@ thiserror = "2"
 fontdb = "0.24"
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate", "macros", "derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tauri-plugin-updater = "2.11.0"
 
 # PDF export goes through WebView2's own print pipeline, which is the only way to
 # get correct Chinese text without shipping a font-embedding renderer. Both

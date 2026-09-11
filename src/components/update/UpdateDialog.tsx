@@ -1,112 +1,113 @@
 import { Button, Modal } from "@heroui/react";
-import { useState } from "react";
 
-import { api, errorMessage } from "@/lib/api";
-import { formatReleaseTime } from "@/lib/update";
-import type { UpdateInfo } from "@/types";
+import { ReleaseNotes } from "@/components/update/ReleaseNotes";
+import { useUpdateInstall } from "@/components/update/use-update-install";
+import { api } from "@/lib/api";
+import { GITHUB_URL } from "@/lib/project";
+import { formatBytes, formatReleaseTime, type Update } from "@/lib/update";
 
-/** 与设置里其它警告文字同色。 */
 const WARNING = "var(--qj-warning, #b45309)";
 
 /**
  * 查到新版本时弹出来。
  *
- * 只做「告知 + 取件」：把安装包下到系统下载目录，或者把人送到发布页。
- * 不在后台替换自己的程序文件——那需要一套签名密钥与 `latest.json`，见
- * `src-tauri/src/commands/update.rs` 顶部的说明。
+ * 走的是 Tauri 官方更新器：**下载、验签、静默安装、自动重启**一条龙。安装包落在
+ * 系统临时目录里、装完由系统回收，不会留在「下载」文件夹，也不需要用户再去点一次
+ * 安装向导。装之前会先把当前笔记存盘。
  */
 export function UpdateDialog({
   isOpen,
   onOpenChange,
-  info,
+  update,
 }: {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  info: UpdateInfo;
+  update: Update;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [path, setPath] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { phase, done, total, error, percent, download, installNow } = useUpdateInstall(update);
 
-  const published = formatReleaseTime(info.publishedAt);
-  const canDownload = Boolean(info.assetUrl && info.assetName);
-
-  const download = async () => {
-    if (!info.assetUrl || !info.assetName) return;
-    setBusy(true);
-    setError(null);
-    try {
-      setPath(await api.downloadUpdate(info.assetUrl, info.assetName));
-    } catch (problem) {
-      setError(errorMessage(problem));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const published = formatReleaseTime(update.date);
+  const busy = phase === "downloading" || phase === "installing";
 
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
       <Modal.Container size="lg">
         <Modal.Dialog aria-label="发现新版本">
           <Modal.Header>
-            <Modal.Heading>{`发现新版本 ${info.latestVersion}`}</Modal.Heading>
+            <Modal.Heading>{`发现新版本 ${update.version}`}</Modal.Heading>
           </Modal.Header>
 
           <Modal.Body>
             <p className="text-sm text-muted">
-              {`当前版本 ${info.currentVersion}，可以升级到 ${info.latestVersion}`}
-              {info.prerelease && "（预发布版）"}
+              {`当前版本 ${update.currentVersion}，可以升级到 ${update.version}`}
               {published && ` · 发布于 ${published}`}
             </p>
 
-            {info.notes && (
-              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border/70 bg-surface p-3 text-xs leading-relaxed whitespace-pre-wrap text-foreground/80">
-                {info.notes}
+            {update.body && (
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-border/70 bg-surface p-3">
+                <ReleaseNotes markdown={update.body} />
               </div>
             )}
 
-            {path ? (
-              <div className="mt-3 rounded-lg border border-border/70 bg-surface p-3">
-                <p className="text-xs text-muted">安装包已下载到：</p>
-                <p className="mt-1 text-xs break-all">{path}</p>
-                <Button
-                  className="mt-2"
-                  variant="outline"
-                  onPress={() => void api.revealDownloaded(path)}
-                >
-                  在文件夹中显示
-                </Button>
-              </div>
-            ) : (
+            {phase === "idle" && (
               <p className="mt-3 text-xs text-muted">
-                关闭青简后再运行安装包即可完成升级。你的工作区文件不会被改动。
+                更新全程无需操作：青简会自己下载、静默安装并重新打开，安装包不会留在「下载」文件夹。
               </p>
             )}
 
-            {error && (
-              <p className="mt-3 text-xs" style={{ color: WARNING }}>
+            {phase === "downloading" && (
+              <div className="mt-3">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-default">
+                  <div
+                    className="h-full rounded-full transition-all duration-200"
+                    style={{
+                      width: percent === null ? "30%" : `${percent}%`,
+                      background: "var(--qj-accent)",
+                    }}
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-muted">
+                  {percent === null
+                    ? `正在下载${total > 0 ? ` · ${formatBytes(done)} / ${formatBytes(total)}` : "…"}`
+                    : `正在下载 ${percent}% · ${formatBytes(done)} / ${formatBytes(total)}`}
+                </p>
+              </div>
+            )}
+
+            {phase === "staged" && (
+              <p className="mt-3 text-xs" style={{ color: "var(--qj-accent)" }}>
+                安装包已就绪。点「立即重启并更新」马上完成；直接关掉青简也会自动装上。
+              </p>
+            )}
+
+            {phase === "installing" && (
+              <p className="mt-3 text-xs" style={{ color: "var(--qj-accent)" }}>
+                正在安装，青简马上会自己重新打开…
+              </p>
+            )}
+
+            {phase === "error" && error && (
+              <p className="mt-3 text-xs break-words" style={{ color: WARNING }}>
                 {error}
               </p>
             )}
           </Modal.Body>
 
           <Modal.Footer className="flex flex-wrap justify-end gap-2">
-            {info.releaseUrl && (
-              <Button
-                variant="ghost"
-                onPress={() => void api.openExternal(info.releaseUrl as string)}
-              >
-                打开发布页
-              </Button>
-            )}
-            <Button variant="ghost" onPress={() => onOpenChange(false)}>
-              {path ? "关闭" : "稍后再说"}
+            <Button
+              variant="ghost"
+              onPress={() => void api.openExternal(`${GITHUB_URL}/releases/tag/v${update.version}`)}
+            >
+              打开发布页
             </Button>
-            {canDownload && !path && (
-              <Button isDisabled={busy} onPress={() => void download()}>
-                {busy ? "下载中…" : "立即更新"}
-              </Button>
-            )}
+            <Button variant="ghost" isDisabled={busy} onPress={() => onOpenChange(false)}>
+              {phase === "staged" ? "稍后（关闭时自动安装）" : "稍后再说"}
+            </Button>
+            {phase === "idle" && <Button onPress={() => void download()}>立即更新</Button>}
+            {phase === "downloading" && <Button isDisabled>下载中…</Button>}
+            {phase === "staged" && <Button onPress={() => void installNow()}>立即重启并更新</Button>}
+            {phase === "installing" && <Button isDisabled>安装中…</Button>}
+            {phase === "error" && <Button onPress={() => void download()}>重试</Button>}
           </Modal.Footer>
         </Modal.Dialog>
       </Modal.Container>

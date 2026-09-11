@@ -46,18 +46,50 @@ jobs:
       - name: Rust 测试
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      # 签名私钥由仓库 secret 注入。`createUpdaterArtifacts` 会用它给更新包签名
+      # 并产出 .sig；应用端拿 tauri.conf.json 里的公钥验签，签名对不上就拒绝安装。
+      # 私钥生成时没设密码，所以密码传空串（secret 不存在时也解析成空串）。
       - name: 构建安装包
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
       # 不改名就直接上传的话，GitHub 会把附件名里的非 ASCII 字符丢掉：
-      # 「青简_0.1.1_x64-setup.exe」会变成「_0.1.1_x64-setup.exe」。
-      - name: 改成 ASCII 文件名
+      # 「青简_0.1.2_x64-setup.exe」会变成「_0.1.2_x64-setup.exe」。
+      # latest.json 里的下载地址因此必须指向改名后的 ASCII 文件，否则更新器
+      # 会去下一个 404。
+      - name: 整理产物并生成 latest.json
         shell: pwsh
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TAG: ${{ github.ref_name }}
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $version = "$env:GH_TAG".TrimStart('v')
           New-Item -ItemType Directory -Force -Path out | Out-Null
+
           Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.exe" "out/Qingjian_${version}_x64-setup.exe"
+          Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.nsis.zip" "out/Qingjian_${version}_x64-setup.nsis.zip"
+          Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.nsis.zip.sig" "out/Qingjian_${version}_x64-setup.nsis.zip.sig"
           Copy-Item "src-tauri/target/release/bundle/msi/*.msi" "out/Qingjian_${version}_x64_zh-CN.msi"
+
+          # latest.json 是更新器的入口：版本、更新说明、每个平台更新包的地址与签名。
+          # 更新器只认 windows-x86_64 这个键名。
+          $signature = (Get-Content "out/Qingjian_${version}_x64-setup.nsis.zip.sig" -Raw).Trim()
+          $url = "https://github.com/$env:GH_REPO/releases/download/$env:GH_TAG/Qingjian_${version}_x64-setup.nsis.zip"
+          $manifest = @{
+            version = $version
+            notes = (Get-Content release-notes.md -Raw)
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = $url
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path out/latest.json -Encoding utf8
+
           Get-ChildItem out | Select-Object Name, Length
 
       # 用 gh 而不是 tauri-action：附件名与更新说明都要自己说了算，

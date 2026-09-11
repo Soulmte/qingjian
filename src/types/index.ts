@@ -44,24 +44,6 @@ export interface SearchHit {
   snippet: string;
 }
 
-/** Mirrors `UpdateInfo` in `src-tauri/src/commands/update.rs`. */
-export interface UpdateInfo {
-  currentVersion: string;
-  latestVersion: string;
-  updateAvailable: boolean;
-  /** 该版本被标记为预发布。 */
-  prerelease: boolean;
-  /** Release 标题；没写标题时退回 tag。 */
-  title: string | null;
-  /** 更新说明，Markdown 原文。 */
-  notes: string | null;
-  publishedAt: string | null;
-  releaseUrl: string | null;
-  /** 当前平台的安装包，能从 assets 里认出来时才有。 */
-  assetName: string | null;
-  assetUrl: string | null;
-}
-
 /* -------------------------------------------------------------------------- */
 /* Settings                                                                    */
 /* -------------------------------------------------------------------------- */

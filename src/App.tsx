@@ -1,4 +1,5 @@
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 
 import { EditorPane } from "@/components/editor/EditorPane";
@@ -19,11 +20,11 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { runMatchingCommand, openPathFromDisk } from "@/lib/commands";
 import { useThemeSync } from "@/lib/theme";
-import { checkForUpdates } from "@/lib/update";
+import { checkForUpdates, type Update } from "@/lib/update";
 import { useSettings } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
+import { useUpdate } from "@/stores/update";
 import { useWorkspace } from "@/stores/workspace";
-import type { UpdateInfo } from "@/types";
 
 import { UpdateDialog } from "./components/update/UpdateDialog";
 
@@ -75,7 +76,7 @@ export default function App() {
 
   const [startupNotice, setStartupNotice] = useState<string | null>(null);
   /** 后台查到的新版本；非空时弹窗，用户可以选「立即更新」或「稍后再说」。 */
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [updateOpen, setUpdateOpen] = useState(false);
 
   const [dragWidth, setDragWidth] = useState<number | null>(null);
@@ -99,10 +100,10 @@ export default function App() {
       // 从 store 现读设置，因为上面那次 await 之后 loadSettings 才刚写完值。
       if (!useSettings.getState().settings.autoCheckUpdate) return;
       try {
-        const info = await checkForUpdates();
+        const found = await checkForUpdates();
         useSettings.getState().update("lastUpdateCheck", new Date().toISOString());
-        if (info.updateAvailable) {
-          setUpdateInfo(info);
+        if (found) {
+          setPendingUpdate(found);
           setUpdateOpen(true);
         }
       } catch {
@@ -114,6 +115,40 @@ export default function App() {
   useEffect(() => {
     if (settingsLoaded && isSidebarOpen === null) setSidebarOpen(showSidebar);
   }, [settingsLoaded, showSidebar, isSidebarOpen, setSidebarOpen]);
+
+  /**
+   * 更新已经下好、而用户直接关软件时，顺手把更新装上。
+   *
+   * 这次传 `restartAfterInstall: false`：用户是在关它，不是在重启它，不该替他
+   * 把窗口再拉起来。拦下关闭请求是因为安装程序要先起来本进程才能退——真正退出
+   * 是 `install` 内部做的；`close` 只是万一它抛错时的退路。
+   */
+  useEffect(() => {
+    const current = getCurrentWindow();
+    let closing = false;
+
+    const unlisten = current.onCloseRequested(async (event) => {
+      if (closing) return;
+      const { staged, installing } = useUpdate.getState();
+      if (!staged || installing) return;
+
+      event.preventDefault();
+      closing = true;
+      try {
+        await useWorkspace.getState().flushSave();
+        await staged.install({ restartAfterInstall: false });
+      } catch {
+        // 装不上就照常关，别把用户卡在开着的窗口里
+        useUpdate.getState().clear();
+      } finally {
+        void current.close();
+      }
+    });
+
+    return () => {
+      void unlisten.then((off) => off());
+    };
+  }, []);
 
   // Zoom lives in the webview, so restoring a stored value (and keeping the
   // window in step with the shortcut) has to go through it rather than CSS.
@@ -291,8 +326,8 @@ export default function App() {
       <FrontMatterDialog />
 
       {/* 查到新版本时弹出来。后台检查同样是走这里，只是不阻塞启动。 */}
-      {updateInfo && (
-        <UpdateDialog isOpen={updateOpen} onOpenChange={setUpdateOpen} info={updateInfo} />
+      {pendingUpdate && (
+        <UpdateDialog isOpen={updateOpen} onOpenChange={setUpdateOpen} update={pendingUpdate} />
       )}
 
       <NotePathDialog

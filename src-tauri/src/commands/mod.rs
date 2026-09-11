@@ -10,6 +10,6 @@ pub mod note;
 pub mod omml;
 pub mod pdf;
 pub mod settings;
-pub mod update;
+pub mod shell;
 pub mod upload;
 pub mod workspace;

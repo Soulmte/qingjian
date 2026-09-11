@@ -5,7 +5,6 @@ import type {
   NoteDetail,
   SaveOutcome,
   SearchHit,
-  UpdateInfo,
   Workspace,
 } from "@/types";
 
@@ -121,23 +120,9 @@ export const api = {
    */
   takeOpenFile: () => invoke<string | null>("take_open_file"),
 
-  // Updates
-  /**
-   * 查一次 GitHub Releases 上有没有新版本。
-   *
-   * 当前版本由前端传入，用的就是界面（和「关于」）显示的那个，免得两处各说各话。
-   */
-  checkForUpdates: (payload: {
-    repository: string;
-    currentVersion: string;
-    includePrerelease: boolean;
-  }) => invoke<UpdateInfo>("check_for_updates", payload),
-  /** 把安装包下到系统下载目录，返回落地路径。 */
-  downloadUpdate: (url: string, fileName: string) =>
-    invoke<string>("download_update", { url, fileName }),
+  // Shell
   /** 在系统默认浏览器里打开一个链接（项目主页、发布页）。 */
   openExternal: (url: string) => invoke<void>("open_external", { url }),
-  revealDownloaded: (path: string) => invoke<void>("reveal_downloaded", { path }),
 };
 
 /** Turns a thrown command error into something worth showing a user. */

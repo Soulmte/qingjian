@@ -268,7 +268,7 @@
 │  └─ types/                与 Rust 模型一一对应的类型定义
 ├─ src-tauri/               桌面壳与全部本地能力（Rust）
 │  ├─ src/commands/         暴露给前端的命令：workspace / note / settings /
-│  │                        export / docx / pdf / upload / update …
+│  │                        export / docx / pdf / upload / shell …
 │  ├─ src/services.rs       文件与文本工具：原子写入、路径校验、
 │  │                        编码嗅探、内容哈希
 │  ├─ migrations/           SQLite 迁移（行尾不能动，见下）
@@ -281,14 +281,26 @@
 
 <h2>发布新版本</h2>
 
+<p>自动更新靠一对签名密钥：<strong>私钥签名更新包，公钥验签</strong>。私钥只存在于发布者机器与 GitHub 仓库的 secret 里，不进仓库；公钥已经写死在 <code>src-tauri/tauri.conf.json</code> 的 <code>plugins.updater.pubkey</code> 中。</p>
+
+<p>首次配置（只做一次）：</p>
+
 <ol>
-<li>改 <code>src-tauri/tauri.conf.json</code> 里的版本号（安装包与应用内「关于」都取自它），<code>package.json</code> 与 <code>Cargo.toml</code> 的版本号顺手对齐，再更新 <code>release-notes.md</code>。</li>
-<li>提交，然后打 tag 并推送：<code>git tag -a v0.2.0 -m "青简 v0.2.0" &amp;&amp; git push origin v0.2.0</code>。</li>
-<li>GitHub Actions 会自动跑测试、构建 Windows 安装包，并把它们挂到 <code>v0.2.0</code> 这个 Release 上（见 <code>.github/workflows/release.yml</code>）。</li>
-<li>要同步发到 Gitee，在本地构建后执行：<code>python scripts/publish.py gitee --repo &lt;owner&gt;/qingjian --tag v0.2.0 --notes-file release-notes.md --create-repo --asset "本地路径=ASCII 发布名"</code>。</li>
+<li>生成密钥：<code>npx tauri signer generate -w ~/.tauri/qingjian-updater.key</code>。密码留空（直接回车），这样 CI 里不用另存密码。生成的 <code>.key.pub</code> 内容填进 <code>tauri.conf.json</code> 的 <code>pubkey</code>。</li>
+<li>到 GitHub 仓库 Settings → Secrets and variables → Actions，加两个 secret：<code>TAURI_SIGNING_PRIVATE_KEY</code> 填<strong>私钥文件的全部内容</strong>，<code>TAURI_SIGNING_PRIVATE_KEY_PASSWORD</code> 留空。</li>
+<li><strong>备份私钥</strong>。它一旦丢失，就再也发不出能被现有用户安装的更新——只能让所有人重新手动装一次，用新密钥重来。</li>
 </ol>
 
-<p>两点经验写在这里免得再踩：<strong>安装包的发布名要用 ASCII</strong>——GitHub 保存附件名时会丢掉非 ASCII 字符，本地叫 <code>青简_x64-setup.exe</code> 的文件必须用 <code>--asset 路径=Qingjian_x64-setup.exe</code> 换名发布；<strong>MSI 的代码页必须是 936</strong>，WiX 默认的 1252 装不下「青简」两个字，<code>tauri.conf.json</code> 里已指定 <code>zh-CN</code>。</p>
+<p>每次发版：</p>
+
+<ol>
+<li>改 <code>src-tauri/tauri.conf.json</code> 里的版本号（安装包、应用内「关于」与 <code>latest.json</code> 都取自它），<code>package.json</code> 与 <code>Cargo.toml</code> 的版本号顺手对齐，再更新 <code>release-notes.md</code>。</li>
+<li>提交，然后打 tag 并推送：<code>git tag -a v0.2.0 -m "青简 v0.2.0" &amp;&amp; git push origin v0.2.0</code>。</li>
+<li>GitHub Actions 会自动跑测试、构建并签名的 Windows 安装包，生成 <code>latest.json</code>，全部挂到 <code>v0.2.0</code> 这个 Release 上（见 <code>.github/workflows/release.yml</code>）。已装的青简会在下次启动时读到它并自动更新。</li>
+<li>要同步发到 Gitee，在本地构建后执行：<code>python scripts/publish.py gitee --repo &lt;owner&gt;/qingjian --tag v0.2.0 --notes-file release-notes.md --create-repo --asset "本地路径=ASCII 发布名"</code>。更新端点目前指向 GitHub，Gitee 仅作镜像。</li>
+</ol>
+
+<p>三点经验写在这里免得再踩：<strong>安装包的发布名要用 ASCII</strong>——GitHub 保存附件名时会丢掉非 ASCII 字符，本地叫 <code>青简_x64-setup.exe</code> 的文件必须用 <code>--asset 路径=Qingjian_x64-setup.exe</code> 换名发布，<code>latest.json</code> 里的地址也要跟着改；<strong>MSI 的代码页必须是 936</strong>，WiX 默认的 1252 装不下「青简」两个字，<code>tauri.conf.json</code> 里已指定 <code>zh-CN</code>；<strong><code>tauri.conf.json</code> 是严格 JSON</strong>，不能写 <code>//</code> 注释，注释请写在这里或工作流里。</p>
 
 <h2>已知限制</h2>
 
@@ -296,7 +308,7 @@
 <li>只有 Windows 版本。内核（Tauri + Rust）本身跨平台，但 PDF 导出依赖 WebView2 的打印管线，macOS / Linux 需要另找方案。</li>
 <li>渲染大文档（数万字以上）时首屏会慢一秒左右，Milkdown 对超长文档不是最优解。</li>
 <li>快捷键目前不可自定义。少数键位与系统或命令冲突时，只能按上表标注的替代键使用。</li>
-<li><strong>不支持原地自动更新</strong>：应用会检查新版本并把安装包下到「下载」文件夹，仍需要你关闭青简后自行运行安装包。</li>
+<li>自动更新只在 Windows 上启用（NSIS）。更新包会下载到系统临时目录，安装完成后由系统回收，不会留在「下载」文件夹。</li>
 <li>数学公式的导出只支持 Word（OMML）与 HTML；PDF 里公式是渲染后的静态图形。</li>
 </ul>
 
