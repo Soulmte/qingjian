@@ -10,7 +10,7 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
-    # tauri-action 要建 Release、传附件，需要写权限
+    # 创建 Release、上传附件都要写权限
     permissions:
       contents: write
 
@@ -46,18 +46,32 @@ jobs:
       - name: Rust 测试
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      # tagName 用触发这次运行的 tag，所以 Release 与 tag 天然对齐
-      - name: 构建并发布
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "青简 ${{ github.ref_name }}"
-          releaseBody: |
-            安装包见下方 Assets。`x64-setup.exe` 是单文件安装包，推荐；`x64_zh-CN.msi` 供静默部署使用。
+      - name: 构建安装包
+        run: npm run tauri build
 
-            系统要求见仓库 README 的「下载与安装」一节。
-          releaseDraft: false
-          prerelease: false
-          args: --target x86_64-pc-windows-msvc
+      # 不改名就直接上传的话，GitHub 会把附件名里的非 ASCII 字符丢掉：
+      # 「青简_0.1.1_x64-setup.exe」会变成「_0.1.1_x64-setup.exe」。
+      - name: 改成 ASCII 文件名
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.exe" "out/Qingjian_${version}_x64-setup.exe"
+          Copy-Item "src-tauri/target/release/bundle/msi/*.msi" "out/Qingjian_${version}_x64_zh-CN.msi"
+          Get-ChildItem out | Select-Object Name, Length
+
+      # 用 gh 而不是 tauri-action：附件名与更新说明都要自己说了算，
+      # 说明直接取仓库里的 release-notes.md，与本地发布用的是同一份。
+      - name: 发布
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view '${{ github.ref_name }}' 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create '${{ github.ref_name }}' `
+              --title "青简 ${{ github.ref_name }}" `
+              --notes-file release-notes.md `
+              --verify-tag
+          }
+          gh release upload '${{ github.ref_name }}' out/* --clobber
