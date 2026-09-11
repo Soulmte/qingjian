@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { parseOutline } from "@/lib/markdown";
@@ -20,9 +20,13 @@ export function Outline() {
   const contentLoaded = useWorkspace((state) => state.contentLoaded);
   const activeNoteId = useWorkspace((state) => state.activeNoteId);
 
+  // Rebuilding the outline walks the whole document, so it is handed the deferred
+  // text: while the user is typing the editor keeps priority and the outline
+  // catches up once there is a pause, instead of parsing on every keystroke.
+  const deferredContent = useDeferredValue(content);
   const items = useMemo(
-    () => (contentLoaded ? parseOutline(content) : []),
-    [content, contentLoaded],
+    () => (contentLoaded ? parseOutline(deferredContent) : []),
+    [deferredContent, contentLoaded],
   );
 
   const [activeIndex, setActiveIndex] = useState(-1);

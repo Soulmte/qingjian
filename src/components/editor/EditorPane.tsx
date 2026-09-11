@@ -1,10 +1,11 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { FindBar } from "@/components/editor/FindBar";
 import { QingjianMark } from "@/components/ui/QingjianMark";
 import { cn } from "@/lib/cn";
 import { fontStack, MONO_FONT_FALLBACK } from "@/lib/fonts";
 import { frontMatterKeys, frontMatterValue, parseFrontMatter } from "@/lib/front-matter";
+import { describeDocumentSize, isLargeDocument } from "@/lib/large-document";
 import { useSettings } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
@@ -58,6 +59,9 @@ export function EditorPane() {
   const isSourceMode = useUi((state) => state.isSourceMode);
   const setFrontMatterOpen = useUi((state) => state.setFrontMatterOpen);
 
+  // The note for which the user asked for the rich surface despite its size.
+  const [richTextOverride, setRichTextOverride] = useState<number | null>(null);
+
   const fontSize = useSettings((state) => state.settings.fontSize);
   const lineHeight = useSettings((state) => state.settings.lineHeight);
   const editorWidth = useSettings((state) => state.settings.editorWidth);
@@ -98,6 +102,13 @@ export function EditorPane() {
     return <CenteredMessage>正在打开…</CenteredMessage>;
   }
 
+  // A large document is opened as source first: Milkdown builds a node per
+  // element and a first render of a very long note is not instant, while the
+  // textarea stays responsive. The user can still ask for the rich surface.
+  const large = isLargeDocument(content);
+  const autoSource = large && richTextOverride !== activeNoteId;
+  const showRichText = !isSourceMode && !autoSource;
+
   // `--crepe-base-font-size` drives every scale step in the editor, so pointing
   // it at the user's font size keeps headings and body text in proportion.
   const columnStyle = {
@@ -119,17 +130,32 @@ export function EditorPane() {
   return (
     <div className="relative h-full">
       {/* The find bar drives ProseMirror, so it is hidden in source mode. */}
-      {!isSourceMode && <FindBar />}
+      {showRichText && <FindBar />}
       <div className="editor-scroll">
         <div
           className={cn(
             "editor-column",
-            frontMatter.raw && !isSourceMode && "editor-column--meta",
+            frontMatter.raw && showRichText && "editor-column--meta",
           )}
           data-qj-codebg={codeBackground}
           style={columnStyle}
         >
-          {!isSourceMode && frontMatter.raw && (
+          {autoSource && !isSourceMode && (
+            <div className="qj-meta-bar">
+              <span className="qj-meta-bar__tag">大文件</span>
+              <span className="qj-meta-bar__keys">
+                {`${describeDocumentSize(content)}，已用源代码模式打开以保证流畅`}
+              </span>
+              <button
+                type="button"
+                className="qj-meta-bar__edit"
+                onClick={() => setRichTextOverride(activeNoteId)}
+              >
+                用所见即所得打开
+              </button>
+            </div>
+          )}
+          {showRichText && frontMatter.raw && (
             <div className="qj-meta-bar">
               <span className="qj-meta-bar__tag">YAML</span>
               <span className="qj-meta-bar__keys" title={metadataKeys.join("、")}>
@@ -144,10 +170,10 @@ export function EditorPane() {
               </button>
             </div>
           )}
-          {isSourceMode ? (
-            <SourceEditor value={content} onChange={updateContent} />
-          ) : (
+          {showRichText ? (
             <MarkdownEditor key={activeNoteId} noteId={activeNoteId} onChange={updateContent} />
+          ) : (
+            <SourceEditor value={content} onChange={updateContent} />
           )}
         </div>
       </div>

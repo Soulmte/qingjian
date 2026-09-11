@@ -31,6 +31,18 @@ describe("parseFrontMatter", () => {
     expect(parseFrontMatter(plain)).toEqual({ raw: "", body: plain });
   });
 
+  it("returns a CRLF document without a block untouched", () => {
+    // The fast path must not normalise line endings on a document it does not
+    // have to touch, or the editor's save would rewrite every line break.
+    const plain = "# 标题\r\n\r\n正文\r\n";
+    expect(parseFrontMatter(plain)).toEqual({ raw: "", body: plain });
+  });
+
+  it("does not mistake a longer dash run for a block", () => {
+    const text = "----\n\n正文\n";
+    expect(parseFrontMatter(text)).toEqual({ raw: "", body: text });
+  });
+
   it("ignores a rule that is not on the first line", () => {
     // A `---` in the middle is a thematic break, and must stay one.
     const body = "# 标题\n\n---\n\n正文\n";

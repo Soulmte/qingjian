@@ -92,9 +92,12 @@ export function GoToHeading() {
     setActiveIndex(0);
   }, [query]);
 
+  // Only parsed while the dialog is open: when it is closed there is nothing to
+  // show, and parsing the document on every keystroke to fill a hidden list was
+  // pure waste.
   const headings = useMemo(
-    () => (contentLoaded ? parseOutline(content) : []),
-    [content, contentLoaded],
+    () => (isOpen && contentLoaded ? parseOutline(content) : []),
+    [isOpen, content, contentLoaded],
   );
 
   /** The line the query names, when it names one and there are lines to name. */

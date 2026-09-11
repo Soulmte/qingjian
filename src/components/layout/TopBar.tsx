@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useDeferredValue } from "react";
 
 import {
   ALIGN_COMMANDS,
@@ -62,7 +62,10 @@ export function TopBar() {
   };
 
   const note = notes.find((item) => item.id === activeNoteId) ?? null;
-  const heading = note ? extractTitle(content, note.title) : "青简";
+  // Finding the title walks the document, so it takes the deferred text: the
+  // heading lags by a frame in the worst case, but typing never waits on it.
+  const deferredContent = useDeferredValue(content);
+  const heading = note ? extractTitle(deferredContent, note.title) : "青简";
   const commands = new Map(TOOLBAR_COMMANDS.map((command) => [command.id, command]));
 
   const renderButton = (command: AppCommand) => (

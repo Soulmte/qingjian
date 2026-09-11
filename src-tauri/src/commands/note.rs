@@ -29,7 +29,7 @@ pub async fn read_note_impl(pool: &SqlitePool, id: i64) -> AppResult<NoteDetail>
     let workspace = repo::fetch_workspace(pool, note.workspace_id).await?;
     let path = services::resolve_within(Path::new(&workspace.root_path), &note.rel_path)?;
     let content = services::read_text(&path)?;
-    let hash = services::hash_content(&content.replace("\r\n", "\n"));
+    let hash = services::hash_content_lf(&content);
 
     Ok(NoteDetail {
         note,

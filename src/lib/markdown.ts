@@ -49,6 +49,27 @@ export function countWords(content: string): number {
   return cjk + latin;
 }
 
+/**
+ * Characters in a document, counting a surrogate pair (an emoji, a rare CJK
+ * character) once.
+ *
+ * Replaces `Array.from(content).length`, which allocated an array of every
+ * character in the document — millions of entries on a large note, rebuilt on
+ * every keystroke. This walks the code units instead and never allocates.
+ */
+export function countCharacters(content: string): number {
+  let count = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    const code = content.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff && index + 1 < content.length) {
+      const next = content.charCodeAt(index + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) index += 1;
+    }
+    count += 1;
+  }
+  return count;
+}
+
 /** Reads the heading levels out of the document for the outline panel. */
 export interface OutlineItem {
   level: number;

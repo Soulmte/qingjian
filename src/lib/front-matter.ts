@@ -35,6 +35,13 @@ const OPENER = /^---[ \t]*$/;
  * a blank line, so a real document can never match this shape by accident.
  */
 export function parseFrontMatter(markdown: string): FrontMatter {
+  // Fast path. This runs on every keystroke and on every render of the editor,
+  // and a document with no opening fence is the common case — there is no point
+  // normalising and splitting megabytes of text just to learn there is no
+  // metadata. Without this, a large note paid for a full-document regex and
+  // `split` on every character typed.
+  if (!markdown.startsWith("---")) return { raw: "", body: markdown };
+
   const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
   if (!OPENER.test(lines[0] ?? "")) return { raw: "", body: markdown };
   if ((lines[1] ?? "").trim() === "") return { raw: "", body: markdown };

@@ -1,6 +1,6 @@
 [package]
 name = "qingjian"
-version = "0.1.3"
+version = "0.1.4"
 description = "青简 - 本地 Markdown 编辑器"
 # 这个字段会成为安装包的发布者名，所以用的是发布者，不是代码作者。
 authors = ["Soulmte"]

@@ -9,6 +9,36 @@ const MARKDOWN_EXTENSIONS: [&str; 2] = ["md", "markdown"];
 /// Guards against pathological trees and symlink loops.
 const MAX_SCAN_DEPTH: usize = 32;
 
+/// Folder names that only ever hold build output or dependency caches.
+///
+/// Opening a project folder as a workspace used to walk the whole tree, and
+/// `node_modules` alone ships a README for every one of its tens of thousands of
+/// packages — so the sidebar filled with other people's docs and the app stalled.
+/// These folders are skipped outright; the names are those of generated output
+/// and never of a place someone keeps their notes. (Hidden folders such as `.git`
+/// or `.venv` are already skipped by the leading-dot rule.)
+const SKIP_DIRS: [&str; 13] = [
+    "node_modules",
+    "bower_components",
+    "jspm_packages",
+    "target",
+    "dist",
+    "build",
+    "out",
+    "coverage",
+    "vendor",
+    "Pods",
+    "DerivedData",
+    "__pycache__",
+    "site-packages",
+];
+
+/// Whether a directory name is one of the generated folders we never descend
+/// into. Case-insensitive because Windows folder names are.
+fn is_skipped_dir(name: &str) -> bool {
+    SKIP_DIRS.iter().any(|skip| name.eq_ignore_ascii_case(skip))
+}
+
 pub fn is_markdown(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
@@ -111,7 +141,7 @@ pub fn read_text(path: &Path) -> AppResult<String> {
 /// from the same text in the buffer and every single save would look like a
 /// conflict.
 pub fn hash_file(path: &Path) -> AppResult<String> {
-    Ok(hash_content(&read_text(path)?.replace("\r\n", "\n")))
+    Ok(hash_content_lf(&read_text(path)?))
 }
 
 /// Moves a file to the recycle bin rather than unlinking it.
@@ -264,18 +294,29 @@ fn collect(root: &Path, dir: &Path, depth: usize, out: &mut Vec<String>) -> AppR
         return Ok(());
     }
 
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
+    // One unreadable folder (permissions, a stale mount, a file that vanished mid
+    // walk) must not abort the whole scan: skipping it still returns every note
+    // that could be read, which is far better than an error and an empty tree.
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+
+    for entry in entries.flatten() {
         let name = entry.file_name();
         let name = name.to_string_lossy();
         if name.starts_with('.') {
             continue;
         }
 
-        let file_type = entry.file_type()?;
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         let path = entry.path();
 
         if file_type.is_dir() {
+            if is_skipped_dir(&name) {
+                continue;
+            }
             collect(root, &path, depth + 1, out)?;
         } else if file_type.is_file() && is_markdown(&path) {
             if let Ok(relative) = path.strip_prefix(root) {
@@ -455,6 +496,31 @@ pub fn hash_content(content: &str) -> String {
     format!("{hash:016x}")
 }
 
+/// [`hash_content`] of the text with CRLF read as LF, computed without making a
+/// line-ending-normalised copy of it.
+///
+/// `hash_file` used to `replace("\r\n", "\n")` the whole document first, which
+/// allocated a second copy of every note just to hash it. Skipping the `\r` of a
+/// `\r\n` on the fly produces the same hash without the copy, which matters on
+/// the large documents where that copy was the visible cost.
+pub fn hash_content_lf(content: &str) -> String {
+    let bytes = content.as_bytes();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut index = 0;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte == b'\r' && bytes.get(index + 1) == Some(&b'\n') {
+            // Drop the CR half only; the LF is hashed on the next iteration.
+            index += 1;
+            continue;
+        }
+        hash ^= byte as u64;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        index += 1;
+    }
+    format!("{hash:016x}")
+}
+
 /// Normalises the folder (relative to the workspace) that pasted images go
 /// into. Traversal is still rejected downstream by [`resolve_within`].
 pub fn normalize_relative_dir(input: &str) -> String {
@@ -556,6 +622,42 @@ mod tests {
     fn hash_is_stable_and_content_sensitive() {
         assert_eq!(hash_content("abc"), hash_content("abc"));
         assert_ne!(hash_content("abc"), hash_content("abd"));
+    }
+
+    #[test]
+    fn hashing_normalises_line_endings_without_copying() {
+        // Same hash as the old `replace("\r\n", "\n")` form, so stored hashes
+        // stay valid — but computed in place.
+        for text in ["a\nb\n", "# 标题\n\n正文\n", ""] {
+            assert_eq!(hash_content_lf(text), hash_content(text));
+        }
+        assert_eq!(hash_content_lf("a\r\nb\r\n"), hash_content("a\nb\n"));
+        // A lone CR is content, not an ending, and is left alone.
+        assert_eq!(hash_content_lf("a\rb"), hash_content("a\rb"));
+    }
+
+    #[test]
+    fn scan_skips_generated_folders_and_keeps_notes() {
+        let root = std::env::temp_dir().join(format!("qingjian-scan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+
+        // A note the user cares about, and the shape of a real project around it.
+        std::fs::create_dir_all(root.join("docs")).unwrap();
+        std::fs::write(root.join("docs/guide.md"), "# 指南\n").unwrap();
+        std::fs::create_dir_all(root.join("node_modules/pkg")).unwrap();
+        std::fs::write(root.join("node_modules/pkg/README.md"), "# 别人的文档\n").unwrap();
+        std::fs::create_dir_all(root.join("target/debug")).unwrap();
+        std::fs::write(root.join("target/debug/build.md"), "# 构建产物\n").unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        std::fs::write(root.join(".git/notes.md"), "# 隐藏\n").unwrap();
+        // A generated name nested deeper still has to be pruned.
+        std::fs::create_dir_all(root.join("docs/dist")).unwrap();
+        std::fs::write(root.join("docs/dist/built.md"), "# 输出\n").unwrap();
+
+        let files = scan_markdown(&root).expect("scan");
+        assert_eq!(files, vec!["docs/guide.md".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

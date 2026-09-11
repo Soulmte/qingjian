@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countWords, extractTitle, parseOutline } from "@/lib/markdown";
+import { countCharacters, countWords, extractTitle, parseOutline } from "@/lib/markdown";
 
 describe("extractTitle", () => {
   it("prefers the first heading", () => {
@@ -33,6 +33,21 @@ describe("countWords", () => {
 
   it("does not count the metadata block as prose", () => {
     expect(countWords("---\ntitle: 毕业论文\nauthor: lq\n---\n\n正文\n")).toBe(2);
+  });
+});
+
+describe("countCharacters", () => {
+  it("counts every character, including whitespace and newlines", () => {
+    expect(countCharacters("ab\n中")).toBe(4);
+    expect(countCharacters("")).toBe(0);
+  });
+
+  it("counts a surrogate pair as one character", () => {
+    // A lone emoji is two UTF-16 code units but one character to the reader.
+    expect(countCharacters("\u{1f600}")).toBe(1);
+    expect(countCharacters("a\u{1f600}b")).toBe(3);
+    // A high surrogate with nothing after it is still one code unit.
+    expect(countCharacters("\ud83d")).toBe(1);
   });
 });
 
