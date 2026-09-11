@@ -1,0 +1,94 @@
+import { Button } from "@heroui/react";
+import { useState } from "react";
+
+import { RangeField, SettingGroup, SettingRow, Toggle } from "@/components/settings/controls";
+import { useSetting } from "@/components/settings/use-setting";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useSettings } from "@/stores/settings";
+
+export function BehaviorSection() {
+  const [autoSave, setAutoSave] = useSetting("autoSave");
+  const [autoSaveDelay, setAutoSaveDelay] = useSetting("autoSaveDelay");
+  const [confirmBeforeDelete, setConfirmBeforeDelete] = useSetting("confirmBeforeDelete");
+  const [restoreLastWorkspace, setRestoreLastWorkspace] = useSetting("restoreLastWorkspace");
+  const [showSidebar, setShowSidebar] = useSetting("showSidebar");
+  const [showOutline, setShowOutline] = useSetting("showOutline");
+  const [sidebarWidth, setSidebarWidth] = useSetting("sidebarWidth");
+
+  const [isResetOpen, setIsResetOpen] = useState(false);
+
+  return (
+    <>
+      <SettingGroup title="保存">
+        <SettingRow label="自动保存" hint="关闭后需要手动按 Ctrl+S 才会写入磁盘">
+          <Toggle ariaLabel="自动保存" checked={autoSave} onChange={setAutoSave} />
+        </SettingRow>
+        <SettingRow label="保存延迟" hint={autoSave ? undefined : "自动保存已关闭"}>
+          <RangeField
+            ariaLabel="保存延迟"
+            value={autoSaveDelay}
+            min={200}
+            max={3000}
+            step={100}
+            onChange={setAutoSaveDelay}
+            format={(value) => `${(value / 1000).toFixed(1)} s`}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="启动与删除">
+        <SettingRow label="启动时恢复上次工作区" hint="关闭后启动停留在空状态">
+          <Toggle
+            ariaLabel="启动时恢复上次工作区"
+            checked={restoreLastWorkspace}
+            onChange={setRestoreLastWorkspace}
+          />
+        </SettingRow>
+        <SettingRow label="删除前确认" hint="关闭后删除笔记不再弹出确认框">
+          <Toggle
+            ariaLabel="删除前确认"
+            checked={confirmBeforeDelete}
+            onChange={setConfirmBeforeDelete}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="布局">
+        <SettingRow label="默认显示侧边栏">
+          <Toggle ariaLabel="默认显示侧边栏" checked={showSidebar} onChange={setShowSidebar} />
+        </SettingRow>
+        <SettingRow label="默认显示大纲">
+          <Toggle ariaLabel="默认显示大纲" checked={showOutline} onChange={setShowOutline} />
+        </SettingRow>
+        <SettingRow label="侧边栏宽度" hint="也可以在界面上直接拖拽分栏边框">
+          <RangeField
+            ariaLabel="侧边栏宽度"
+            value={sidebarWidth}
+            min={200}
+            max={420}
+            step={4}
+            onChange={setSidebarWidth}
+            format={(value) => `${value} px`}
+          />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="重置">
+        <SettingRow label="恢复默认设置" hint="外观、编辑器与行为偏好回到初始值，笔记内容不受影响">
+          <Button variant="outline" onPress={() => setIsResetOpen(true)}>
+            恢复默认
+          </Button>
+        </SettingRow>
+      </SettingGroup>
+
+      <ConfirmDialog
+        isOpen={isResetOpen}
+        onOpenChange={setIsResetOpen}
+        title="恢复默认设置？"
+        description="当前的外观、编辑器与行为偏好会被重置，笔记内容不受影响。"
+        confirmLabel="恢复默认"
+        onConfirm={() => useSettings.getState().reset()}
+      />
+    </>
+  );
+}

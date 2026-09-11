@@ -1,0 +1,604 @@
+/* ============================================================
+   主题变量系统
+   2 明暗模式 × 3 强调色 = 6 主题；代码背景另配 6 色
+   HeroUI 组件通过覆盖 --accent 系变量联动换色
+   ============================================================ */
+
+:root {
+  /* 强调色兜底：设置加载完成前 `data-qj-accent` 还不存在，而下面的纸色是由
+     强调色混合派生的，所以这里必须先给出一个可解析的值。 */
+  --qj-accent: #4a7c59;
+  --qj-accent-hover: #3f6b4c;
+  --qj-accent-light: #e8f0ea;
+  --qj-accent-text: #ffffff;
+
+  /* 字体 */
+  --qj-font: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Microsoft YaHei", sans-serif;
+  --qj-font-mono: "Cascadia Code", Consolas, "Courier New", monospace;
+
+  /* 布局常量 */
+  --qj-sidebar-w: 264px;
+  --qj-info-w: 288px;
+  --qj-radius: 12px;
+}
+
+/* ---------- 基底与着色强度 ----------
+   用户给定的纸色作为「中性基底」原样保留，着色强度单独抽成 `--qj-tint-*`。
+   强调色只通过 color-mix 注入基底，因此换主题时改变的不是某个按钮，而是
+   整块画布的色相。想整体调浓淡，改这一组变量即可。
+
+   分级刻意不对称：侧栏、工具栏、分割线这些“边框区域”着色较重，承担主题
+   的辨识度；书写纸面只轻带上一点，保证长时间阅读不刺眼。 */
+
+html.light,
+html[data-theme="light"] {
+  --qj-base-bg: #f6f5f1;
+  --qj-base-bg-sidebar: #efece6;
+  --qj-base-bg-paper: #ffffff;
+  --qj-base-bg-toolbar: #fbfaf7;
+  --qj-base-text: #2d2a26;
+  --qj-base-text-light: #8b857a;
+  --qj-base-border: #e4e0d8;
+  --qj-base-border-strong: #d5d0c5;
+
+  --qj-tint-bg: 8%;
+  --qj-tint-bg-sidebar: 18%;
+  --qj-tint-bg-paper: 5%;
+  --qj-tint-bg-toolbar: 12%;
+  --qj-tint-text: 5%;
+  --qj-tint-text-light: 13%;
+  --qj-tint-border: 16%;
+  --qj-tint-border-strong: 26%;
+  --qj-bg-hover: color-mix(in oklab, var(--qj-accent) 10%, transparent);
+
+  --qj-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --qj-overlay: rgba(45, 42, 38, 0.32);
+
+  /* 品牌标记：方印的顶面与底面。从强调色派生，所以标记跟着主题换色；
+     公式与 design/make-logo.py 里的 TOP_MIX / BOTTOM_MIX 对应。 */
+  --qj-mark-top: color-mix(in srgb, var(--qj-accent) 88%, #ffffff);
+  --qj-mark-bottom: color-mix(in srgb, var(--qj-accent) 92%, #000000);
+}
+
+/* ---------- 暗色基底 ----------
+   深底需要更高的占比才能在切换时看出来，因此暗色的着色整体偏重。 */
+
+html.dark,
+html[data-theme="dark"] {
+  --qj-base-bg: #1d1c1a;
+  --qj-base-bg-sidebar: #161513;
+  --qj-base-bg-paper: #252421;
+  --qj-base-bg-toolbar: #211f1d;
+  --qj-base-text: #d9d5cc;
+  --qj-base-text-light: #8f897d;
+  --qj-base-border: #383530;
+  --qj-base-border-strong: #4a463f;
+
+  --qj-tint-bg: 14%;
+  --qj-tint-bg-sidebar: 28%;
+  --qj-tint-bg-paper: 8%;
+  --qj-tint-bg-toolbar: 18%;
+  --qj-tint-text: 5%;
+  --qj-tint-text-light: 11%;
+  --qj-tint-border: 24%;
+  --qj-tint-border-strong: 32%;
+  --qj-bg-hover: color-mix(in oklab, var(--qj-accent) 16%, transparent);
+
+  --qj-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --qj-overlay: rgba(0, 0, 0, 0.55);
+
+  /* 暗色的强调色本身就是「亮色版」，混白要更少，混黑要更多，才还是同一枚印。 */
+  --qj-mark-top: color-mix(in srgb, var(--qj-accent) 92%, #ffffff);
+  --qj-mark-bottom: color-mix(in srgb, var(--qj-accent) 86%, #000000);
+}
+
+/* ---------- 派生：基底 + 强调色 ----------
+   选择器同时覆盖 <html> 与主题预览卡。预览卡自带 data-qj-accent，必须在这里
+   重新派生一次；否则它只会继承 <html> 算好的颜色，三张卡片看起来一模一样。
+   基底变量从 <html> 继承而来，所以这里不需要重复写十六进制值。 */
+
+html.light,
+html[data-theme="light"],
+html.light .qj-theme-preview,
+html[data-theme="light"] .qj-theme-preview {
+  --qj-bg: color-mix(in oklab, var(--qj-accent) var(--qj-tint-bg, 8%), var(--qj-base-bg));
+  --qj-bg-sidebar: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-bg-sidebar, 18%),
+    var(--qj-base-bg-sidebar)
+  );
+  --qj-bg-paper: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-bg-paper, 5%),
+    var(--qj-base-bg-paper)
+  );
+  --qj-bg-toolbar: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-bg-toolbar, 12%),
+    var(--qj-base-bg-toolbar)
+  );
+  --qj-text: color-mix(in oklab, var(--qj-accent) var(--qj-tint-text, 5%), var(--qj-base-text));
+  --qj-text-light: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-text-light, 13%),
+    var(--qj-base-text-light)
+  );
+  --qj-border: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-border, 16%),
+    var(--qj-base-border)
+  );
+  --qj-border-strong: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-border-strong, 26%),
+    var(--qj-base-border-strong)
+  );
+
+  /* 弹层：菜单、下拉、浮动手柄。浅色纸面本身已近纯白，弹层只能靠
+     「更白 + 描边 + 阴影」分层，所以底色只带极淡的强调色；对比度
+     由 --qj-menu-icon 和 --qj-menu-border 提供。 */
+  --qj-bg-elevated: color-mix(in oklab, var(--qj-accent) 3%, #ffffff);
+  --qj-bg-elevated-low: color-mix(in oklab, var(--qj-accent) 7%, #f1efe9);
+  --qj-menu-icon: color-mix(in oklab, var(--qj-accent) 18%, #57534b);
+  --qj-menu-border: color-mix(in oklab, var(--qj-accent) 16%, #d5d0c5);
+  --qj-menu-hover: color-mix(in oklab, var(--qj-accent) 12%, transparent);
+  --qj-menu-selected: color-mix(in oklab, var(--qj-accent) 22%, transparent);
+  /* 浅色下弹层和纸面几乎同亮度，分层主要靠阴影。--qj-shadow 对整页容器
+     来说太重，这里单独给菜单一层更明显的投影。 */
+  --qj-menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.07), 0 12px 32px rgba(0, 0, 0, 0.16);
+}
+
+html.dark,
+html[data-theme="dark"],
+html.dark .qj-theme-preview,
+html[data-theme="dark"] .qj-theme-preview {
+  --qj-bg: color-mix(in oklab, var(--qj-accent) var(--qj-tint-bg, 14%), var(--qj-base-bg));
+  --qj-bg-sidebar: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-bg-sidebar, 28%),
+    var(--qj-base-bg-sidebar)
+  );
+  --qj-bg-paper: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-bg-paper, 8%),
+    var(--qj-base-bg-paper)
+  );
+  --qj-bg-toolbar: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-bg-toolbar, 18%),
+    var(--qj-base-bg-toolbar)
+  );
+  --qj-text: color-mix(in oklab, var(--qj-accent) var(--qj-tint-text, 5%), var(--qj-base-text));
+  --qj-text-light: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-text-light, 11%),
+    var(--qj-base-text-light)
+  );
+  --qj-border: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-border, 24%),
+    var(--qj-base-border)
+  );
+  --qj-border-strong: color-mix(
+    in oklab,
+    var(--qj-accent) var(--qj-tint-border-strong, 32%),
+    var(--qj-base-border-strong)
+  );
+
+  /* 弹层：菜单、下拉、浮动手柄。深色纸面很暗，弹层必须比纸面更亮才
+     分得开；阴影在深底上几乎不可见，层级主要靠「提亮 + 描边」。 */
+  --qj-bg-elevated: color-mix(in oklab, var(--qj-accent) 12%, #322f2a);
+  --qj-bg-elevated-low: color-mix(in oklab, var(--qj-accent) 10%, #2c2a26);
+  --qj-menu-icon: color-mix(in oklab, var(--qj-accent) 18%, #c4beb1);
+  --qj-menu-border: color-mix(in oklab, var(--qj-accent) 16%, #524e46);
+  --qj-menu-hover: color-mix(in oklab, var(--qj-accent) 18%, transparent);
+  --qj-menu-selected: color-mix(in oklab, var(--qj-accent) 28%, transparent);
+  /* 深色下阴影几乎不可见（反正底就是黑的），分层靠提亮和描边，阴影保持
+     全局值即可。 */
+  --qj-menu-shadow: var(--qj-shadow);
+}
+
+/* ---------- 强调色：竹青 ---------- */
+
+[data-qj-accent="bamboo"] {
+  --qj-accent: #4a7c59;
+  --qj-accent-hover: #3f6b4c;
+  --qj-accent-light: #e8f0ea;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="bamboo"] {
+  --qj-accent: #7ba885;
+  --qj-accent-hover: #8bb994;
+  --qj-accent-light: #26332b;
+  --qj-accent-text: #101711;
+}
+
+/* ---------- 强调色：墨蓝 ---------- */
+
+[data-qj-accent="ink"] {
+  --qj-accent: #3b5b8c;
+  --qj-accent-hover: #324d77;
+  --qj-accent-light: #e6ebf3;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="ink"] {
+  --qj-accent: #7d9cc9;
+  --qj-accent-hover: #8dabd5;
+  --qj-accent-light: #232a35;
+  --qj-accent-text: #0f131a;
+}
+
+/* ---------- 强调色：胭脂 ---------- */
+
+[data-qj-accent="rouge"] {
+  --qj-accent: #a3536b;
+  --qj-accent-hover: #8e475c;
+  --qj-accent-light: #f3e6ea;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="rouge"] {
+  --qj-accent: #c08798;
+  --qj-accent-hover: #ca97a7;
+  --qj-accent-light: #352529;
+  --qj-accent-text: #1a0d11;
+}
+
+/* ---------- 强调色：赭石 ---------- */
+
+[data-qj-accent="ochre"] {
+  --qj-accent: #9c5b34;
+  --qj-accent-hover: #8a4f2c;
+  --qj-accent-light: #f5e8df;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="ochre"] {
+  --qj-accent: #c99a72;
+  --qj-accent-hover: #d5aa86;
+  --qj-accent-light: #33261d;
+  --qj-accent-text: #1a1109;
+}
+
+/* ---------- 强调色：黛紫 ---------- */
+
+[data-qj-accent="violet"] {
+  --qj-accent: #6a5b93;
+  --qj-accent-hover: #5d4f82;
+  --qj-accent-light: #ece8f4;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="violet"] {
+  --qj-accent: #a99ccc;
+  --qj-accent-hover: #b7abd6;
+  --qj-accent-light: #2a2537;
+  --qj-accent-text: #150f1e;
+}
+
+/* ---------- 强调色：苍碧 ---------- */
+
+[data-qj-accent="teal"] {
+  --qj-accent: #3f7d7a;
+  --qj-accent-hover: #366b69;
+  --qj-accent-light: #e2efee;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="teal"] {
+  --qj-accent: #7fb8b3;
+  --qj-accent-hover: #8fc5c0;
+  --qj-accent-light: #1d2f2e;
+  --qj-accent-text: #0c1717;
+}
+
+/* ---------- HeroUI 变量联动 ----------
+   非 layer 覆盖必然生效；背景前景让组件感知青简纸色 */
+
+[data-qj-accent="bamboo"],
+[data-qj-accent="ink"],
+[data-qj-accent="rouge"],
+[data-qj-accent="ochre"],
+[data-qj-accent="violet"],
+[data-qj-accent="teal"] {
+  --accent: var(--qj-accent);
+  --accent-hover: var(--qj-accent-hover);
+  --accent-foreground: var(--qj-accent-text);
+  --focus: var(--qj-accent);
+  --link: var(--qj-accent);
+  --accent-soft: color-mix(in oklab, var(--qj-accent) 15%, transparent);
+  --accent-soft-foreground: color-mix(in oklab, var(--qj-accent) 70%, var(--foreground) 30%);
+  --accent-soft-hover: color-mix(in oklab, var(--qj-accent) 20%, transparent);
+}
+
+html.light,
+html.dark {
+  --background: var(--qj-bg);
+  --foreground: var(--qj-text);
+  --surface: var(--qj-bg-paper);
+  --surface-foreground: var(--qj-text);
+  --overlay: var(--qj-bg-paper);
+  --overlay-foreground: var(--qj-text);
+  --border: var(--qj-border);
+  --separator: var(--qj-border);
+}
+
+/* ---------- 代码背景六色 ----------
+   三亮：云白/暖沙/青瓷；三暗：石墨/墨玉/深空
+   变量由下面「代码块」一节消费（data-qj-codebg 挂编辑器容器） */
+
+[data-qj-codebg="cloud"] {
+  --qj-code-bg: #fbfcfe;
+  --qj-code-border: #dde3ec;
+  --qj-code-ln: #b3bccb;
+  --qj-code-ln-sep: #e6eaf1;
+  --qj-code-text: #2b3242;
+}
+
+[data-qj-codebg="sand"] {
+  --qj-code-bg: #faf6ee;
+  --qj-code-border: #e6ddc9;
+  --qj-code-ln: #b8ad93;
+  --qj-code-ln-sep: #ece4d2;
+  --qj-code-text: #3d3728;
+}
+
+[data-qj-codebg="celadon"] {
+  --qj-code-bg: #f1f6f2;
+  --qj-code-border: #d2e0d7;
+  --qj-code-ln: #9db3a5;
+  --qj-code-ln-sep: #e0eae2;
+  --qj-code-text: #273b30;
+}
+
+[data-qj-codebg="graphite"] {
+  --qj-code-bg: #26282c;
+  --qj-code-border: #3a3d43;
+  --qj-code-ln: #5c626b;
+  --qj-code-ln-sep: #383b41;
+  --qj-code-text: #d4d7dc;
+}
+
+[data-qj-codebg="jade"] {
+  --qj-code-bg: #1d2b26;
+  --qj-code-border: #2f4038;
+  --qj-code-ln: #55705f;
+  --qj-code-ln-sep: #2b3a33;
+  --qj-code-text: #cfdfd4;
+}
+
+[data-qj-codebg="space"] {
+  --qj-code-bg: #1e2233;
+  --qj-code-border: #323852;
+  --qj-code-ln: #565f85;
+  --qj-code-ln-sep: #2c3249;
+  --qj-code-text: #d4d9ea;
+}
+
+/* ============================================================
+   青简整合层
+   上面的变量如何落到 HeroUI、Milkdown 与设置界面上
+   ============================================================ */
+
+/* ---------- 圆角：HeroUI 组件跟随 --qj-radius ---------- */
+
+html.light,
+html.dark {
+  --radius: var(--qj-radius);
+  --radius-field: var(--qj-radius);
+  --radius-xs: max(0px, calc(var(--qj-radius) - 8px));
+  --radius-sm: max(0px, calc(var(--qj-radius) - 6px));
+  --radius-md: max(0px, calc(var(--qj-radius) - 4px));
+  --radius-lg: var(--qj-radius);
+  --radius-xl: calc(var(--qj-radius) + 4px);
+  --radius-2xl: calc(var(--qj-radius) + 8px);
+  --radius-3xl: calc(var(--qj-radius) + 12px);
+  --radius-4xl: calc(var(--qj-radius) + 16px);
+}
+
+/* ---------- 字体 ----------
+   字体族由「设置 → 外观 / 编辑器 / 代码」从本机系统字体中选择，
+   运行时以行内变量注入：
+   --qj-font（界面）、--qj-editor-font-stack（正文）、--qj-code-font-stack（代码）。
+   `--font-sans` / `--font-mono` 继续指向它们，所以 Tailwind 的 font-sans 也跟着走。 */
+
+html.light,
+html.dark {
+  --font-sans: var(--qj-font);
+  --font-mono: var(--qj-font-mono);
+}
+
+/* ---------- 强调色的内嵌预览 ----------
+   上面的深色强调色写作 `html.dark[data-qj-accent=…]`，只命中根元素；
+   设置面板里的色卡是后代元素，这里补一组后代选择器让预览也跟随明暗。 */
+
+html.dark [data-qj-accent="bamboo"] {
+  --qj-accent: #7ba885;
+  --qj-accent-hover: #8bb994;
+  --qj-accent-light: #26332b;
+  --qj-accent-text: #101711;
+}
+
+html.dark [data-qj-accent="ink"] {
+  --qj-accent: #7d9cc9;
+  --qj-accent-hover: #8dabd5;
+  --qj-accent-light: #232a35;
+  --qj-accent-text: #0f131a;
+}
+
+html.dark [data-qj-accent="rouge"] {
+  --qj-accent: #c08798;
+  --qj-accent-hover: #ca97a7;
+  --qj-accent-light: #352529;
+  --qj-accent-text: #1a0d11;
+}
+
+html.dark [data-qj-accent="ochre"] {
+  --qj-accent: #c99a72;
+  --qj-accent-hover: #d5aa86;
+  --qj-accent-light: #33261d;
+  --qj-accent-text: #1a1109;
+}
+
+html.dark [data-qj-accent="violet"] {
+  --qj-accent: #a99ccc;
+  --qj-accent-hover: #b7abd6;
+  --qj-accent-light: #2a2537;
+  --qj-accent-text: #150f1e;
+}
+
+html.dark [data-qj-accent="teal"] {
+  --qj-accent: #7fb8b3;
+  --qj-accent-hover: #8fc5c0;
+  --qj-accent-light: #1d2f2e;
+  --qj-accent-text: #0c1717;
+}
+
+/* ---------- 面板底色 ---------- */
+
+.qj-sidebar {
+  background: var(--qj-bg-sidebar);
+}
+
+.qj-toolbar {
+  background: var(--qj-bg-toolbar);
+}
+
+.qj-paper {
+  background: var(--qj-bg-paper);
+}
+
+.qj-shadow {
+  box-shadow: var(--qj-shadow);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--qj-accent) 28%, transparent);
+}
+
+/* ---------- 正文排版（数值由设置以行内变量注入） ---------- */
+
+.milkdown {
+  --crepe-font-default: var(--qj-editor-font-stack, var(--qj-font));
+  --crepe-font-title: var(--qj-editor-font-stack, var(--qj-font));
+  --crepe-font-code: var(--qj-code-font-stack, var(--qj-font-mono));
+}
+
+.milkdown .ProseMirror {
+  line-height: var(--qj-line-height, 1.75);
+}
+
+.milkdown .ProseMirror img {
+  max-width: var(--qj-image-max-width, 100%);
+  height: auto;
+}
+
+/* Crepe caps the image at `max-width: 100%` of its wrapper and makes the wrapper
+   `fit-content`, so a rule on the <img> alone can never make the image smaller
+   than its wrapper. Constraining the wrapper (and the figure around it) is what
+   makes 设置 → 图像 → 最大宽度 take effect, and `height: auto` keeps the result
+   proportional. The [data-qj-codebg] prefix is only there to win the cascade
+   against Crepe's own rules without relying on stylesheet order. */
+[data-qj-codebg] .milkdown .ProseMirror img,
+[data-qj-codebg] .milkdown .milkdown-image-block,
+[data-qj-codebg] .milkdown .milkdown-image-block > .image-wrapper,
+[data-qj-codebg] .milkdown .milkdown-image-inline {
+  max-width: var(--qj-image-max-width, 100%);
+  height: auto;
+}
+
+/* The wrapper is centred by Crepe; keep that when it is narrower than the column. */
+[data-qj-codebg] .milkdown .milkdown-image-block > .image-wrapper {
+  margin-inline: auto;
+}
+
+/* ---------- 代码块：六色主题 ----------
+   叠加 [data-qj-codebg] 前缀是为了稳定压过 Crepe 自身的
+   `.milkdown .milkdown-code-block` 规则，不依赖样式表加载顺序。 */
+
+[data-qj-codebg] .milkdown .milkdown-code-block,
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-editor,
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-gutters,
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-panel {
+  background: var(--qj-code-bg);
+}
+
+[data-qj-codebg] .milkdown .milkdown-code-block {
+  border: 1px solid var(--qj-code-border);
+  border-radius: calc(var(--qj-radius) - 2px);
+  color: var(--qj-code-text);
+}
+
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-gutters {
+  color: var(--qj-code-ln);
+  border-right: 1px solid var(--qj-code-ln-sep);
+}
+
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-content,
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-scroller,
+[data-qj-codebg] .milkdown .milkdown-code-block .milkdown-code-block-placeholder {
+  font-family: var(--qj-code-font-stack, var(--qj-font-mono));
+  font-size: var(--qj-code-font-size, 14px);
+}
+
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-activeLine,
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-activeLineGutter {
+  background: transparent;
+}
+
+/* CodeMirror's `highlightActiveLine` marks the cursor's line with
+   `cm-activeLine` without checking focus, and a code block that has never been
+   clicked keeps its selection at position 0. Unscoped, that lit up the first
+   line of every block in the document. Only the focused block gets the tint. */
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-editor.cm-focused .cm-activeLine,
+[data-qj-codebg] .milkdown .milkdown-code-block .cm-editor.cm-focused .cm-activeLineGutter {
+  background: color-mix(in oklab, var(--qj-code-text) 7%, transparent);
+}
+
+/* 代码块内的语言选择器跟随代码背景，而不是界面纸色。深色代码背景配浅色
+   面板时，继承来的浅色文字会与浅色底同色，整个列表直接看不见。 */
+[data-qj-codebg] .milkdown .milkdown-code-block .list-wrapper {
+  background: var(--qj-code-bg);
+  border: 1px solid var(--qj-code-border);
+}
+
+/* ---------- 强调色加固 ----------
+   HeroUI 自己也在 :root 上定义 --accent / --accent-soft 等变量，并给了一
+   组 oklch 默认值。这里用 html[data-qj-accent] 再声明一次：选择器权重更高
+   （0,1,1 对 0,1,0），且不在任何 @layer 内，因此换色一定压过组件库默认值。 */
+
+html[data-qj-accent] {
+  --accent: var(--qj-accent);
+  --accent-hover: var(--qj-accent-hover);
+  --accent-foreground: var(--qj-accent-text);
+  --focus: var(--qj-accent);
+  --link: var(--qj-accent);
+  --accent-soft: color-mix(in oklab, var(--qj-accent) 15%, transparent);
+  --accent-soft-foreground: color-mix(in oklab, var(--qj-accent) 72%, var(--qj-text) 28%);
+  --accent-soft-hover: color-mix(in oklab, var(--qj-accent) 24%, transparent);
+}
+
+/* ---------- 主题切换的可见性 ----------
+   换主题时不只是换一个按钮色：光标、滚动条、大块底色都跟着走。 */
+
+.milkdown .ProseMirror {
+  caret-color: var(--qj-accent);
+}
+
+/* 让底色平滑过渡，变化能被“看到”，而不是一帧内跳变。
+   只挂在几块大面积容器上：图标按钮、行高亮这类小元素各自已有过渡，
+   给它们再叠一层慢速过渡只会显得拖沓。 */
+.qj-root,
+.qj-sidebar,
+.qj-toolbar,
+.qj-paper,
+.status-bar,
+.editor-scroll {
+  transition:
+    background-color 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease;
+}

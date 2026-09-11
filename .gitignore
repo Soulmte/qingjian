@@ -1,0 +1,35 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Rust / Tauri
+# target 是构建产物（数百 MB），gen/schemas 由 tauri-build 生成
+src-tauri/target
+src-tauri/gen
+
+# Python 生成脚本的字节码缓存
+__pycache__
+
+# 导出功能的测试产物
+/欢迎使用青简.*

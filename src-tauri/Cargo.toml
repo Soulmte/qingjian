@@ -1,0 +1,63 @@
+[package]
+name = "qingjian"
+version = "0.1.0"
+description = "青简 - 本地 Markdown 编辑器"
+authors = ["lq"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "qingjian_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+# Image hosting talks to the Git provider from Rust, so an access token never
+# reaches the webview. ureq is tiny and resolves entirely offline here.
+ureq = { version = "3", features = ["json"] }
+base64 = "0.23"
+# Markdown written by a Chinese Windows editor is usually GB18030, not UTF-8.
+# Used only as a fallback when a file is not valid UTF-8.
+encoding_rs = "0.8"
+# Word's native equation format is OMML, and the frontend already has the formula
+# as MathML (rendered by KaTeX). Converting one tree to the other is a small walk,
+# so a read-only XML parser is all that is needed to do it here.
+roxmltree = "0.20"
+# Word export is an OOXML package, which is a ZIP of XML parts. Compression is
+# limited to the flate2 backend so the build stays resolvable offline.
+zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+fontdb = "0.24"
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate", "macros", "derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# PDF export goes through WebView2's own print pipeline, which is the only way to
+# get correct Chinese text without shipping a font-embedding renderer. Both
+# crates are already in the dependency tree through wry, so this only makes them
+# nameable; the target gate keeps a non-Windows build possible.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+# Deleting a note goes through the shell so the file lands in the recycle bin
+# instead of disappearing; nothing else here needs the Win32 bindings.
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Shell"] }
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

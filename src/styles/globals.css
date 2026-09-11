@@ -1,0 +1,598 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "./theme.css";
+@import "./editor.css";
+
+@theme {
+  --font-sans:
+    "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared primitives                                                   */
+/* ------------------------------------------------------------------ */
+
+/* Interactive elements opt into the hand cursor. The webview does not do this
+ * for custom buttons, and its absence is what made the chrome feel inert. */
+button,
+[role="button"],
+[role="radio"],
+[role="switch"],
+[role="tab"],
+[role="option"],
+summary,
+label[for],
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"],
+select {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"],
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
+/* Minimal toolbar icon button: square-ish, quiet until hovered. */
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border: none;
+  border-radius: max(4px, calc(var(--qj-radius) - 6px));
+  background: transparent;
+  color: var(--qj-text-light);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.tb-btn:hover:not(:disabled) {
+  background: var(--qj-bg-hover);
+  color: var(--qj-text);
+}
+
+.tb-btn:active:not(:disabled) {
+  background: color-mix(in oklab, var(--qj-text) 12%, transparent);
+}
+
+.tb-btn[aria-pressed="true"] {
+  background: var(--qj-accent-light, var(--qj-bg-hover));
+  color: var(--qj-accent);
+}
+
+.tb-btn:focus-visible {
+  outline: 2px solid var(--qj-accent);
+  outline-offset: 1px;
+}
+
+.tb-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tb-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Tinted variant used where the action is the point of the region, such as
+ * "new note". Keeps the accent colour visible in the main chrome. */
+.tb-btn--accent {
+  background: var(--qj-accent-light);
+  color: var(--qj-accent);
+}
+
+.tb-btn--accent:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--qj-accent) 22%, transparent);
+  color: var(--qj-accent);
+}
+
+/* Destructive action, e.g. deleting a note: quiet until it is hovered. */
+.tb-btn--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Text input matching the flat look; kept as a class so it can be reused by
+ * plain <input> elements that do not need a full HeroUI TextField. */
+.field {
+  border: 1px solid var(--separator);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--foreground);
+  padding: 0.375rem 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.field::placeholder {
+  color: var(--muted);
+}
+
+.field:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--separator);
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings dialog                                                     */
+/* ------------------------------------------------------------------ */
+
+/* The dialog owns the full height, so the panel's default padding and radius
+ * are replaced with a compact shell that fills it edge to edge. */
+.modal__dialog.qj-settings {
+  width: min(960px, 92vw);
+  height: min(640px, 88vh);
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--qj-radius);
+  box-shadow: var(--qj-shadow);
+}
+
+/* A small flat dialog: no default padding, so the header, body and footer can
+ * sit edge to edge like the rest of the chrome. */
+.modal__dialog.qj-dialog {
+  width: min(460px, 92vw);
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--qj-radius);
+  box-shadow: var(--qj-shadow);
+}
+
+/* The export format list. The chosen row uses the same language as the settings
+ * segmented control — a tinted groove rather than a filled pill. */
+.qj-format-option--active {
+  border-color: color-mix(in oklab, var(--qj-accent) 55%, var(--separator));
+  background: color-mix(in oklab, var(--qj-accent) 8%, var(--surface));
+}
+
+.qj-frontmatter-editor {
+  display: block;
+  width: 100%;
+  min-height: 9rem;
+  font-family: var(--qj-font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  resize: vertical;
+  tab-size: 2;
+}
+
+/* Floating menu that must escape an ancestor's `overflow`, so it is portalled
+ * to <body> and positioned against the viewport. HeroUI's modal overlay sits at
+ * `--z-index-overlay` (100000), so this has to clear that or the menu renders
+ * behind the dialog and looks like it never opened. */
+.qj-popover {
+  position: fixed;
+  z-index: 100050;
+  overflow: hidden;
+  border: 1px solid var(--qj-menu-border);
+  border-radius: calc(var(--qj-radius) - 2px);
+  background: var(--qj-bg-elevated);
+  box-shadow: var(--qj-menu-shadow);
+}
+
+/* Only the list scrolls, so its scroll bar is the only hint that there is more
+ * to see — and the global thin/`--separator` thumb all but disappears against
+ * the elevated surface. Chromium ignores `::-webkit-scrollbar` styling whenever
+ * `scrollbar-color` is set to a real colour, so it has to be overridden here. */
+.qj-popover ul {
+  scrollbar-color: color-mix(in oklab, var(--qj-text-light) 75%, var(--qj-bg-elevated))
+    transparent;
+}
+
+/* ------------------------------------------------------------------ */
+/* 右键菜单                                                            */
+/* ------------------------------------------------------------------ */
+
+/* 定位方式不同（跟随指针而不是锚点），所以不复用 PopoverMenu，只共用
+   `.qj-popover` 的底面、描边、阴影和层级。 */
+.qj-context-menu {
+  min-width: 236px;
+  max-width: 340px;
+  padding: 4px;
+  overflow: visible;
+}
+
+.qj-menu-heading {
+  padding: 6px 8px 3px;
+  color: var(--qj-text-light);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.qj-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: max(4px, calc(var(--qj-radius) - 6px));
+  background: transparent;
+  color: var(--qj-text);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+
+.qj-menu-item:hover:not(.is-disabled),
+.qj-menu-item.is-active {
+  background: var(--qj-menu-hover);
+}
+
+.qj-menu-item.is-danger {
+  color: var(--danger);
+}
+
+.qj-menu-item.is-disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.qj-menu-item__icon {
+  display: none;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+/* 图标可有可无；空容器不占位置，免得带图标和不带图标的条目左边错开。 */
+.qj-menu-item__icon:not(:empty) {
+  display: inline-flex;
+}
+
+.qj-menu-item__label {
+  min-width: 0;
+  flex: 1;
+}
+
+.qj-menu-item__chord {
+  flex-shrink: 0;
+  color: var(--qj-text-light);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 二级菜单的指示符，贴在行尾。 */
+.qj-menu-item__arrow {
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: var(--qj-text-light);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.qj-menu-item.is-active .qj-menu-item__arrow {
+  color: var(--qj-accent);
+}
+
+/* 标题级别与对齐各占一个二级菜单，用分段控件表达「当前是哪一档」。
+   设置页的 SegmentedControl 是同一套语言（外描边凹槽 + 小圆角选中块），
+   这里对齐它，而不是用药丸按钮——胶囊在菜单里看着太跳，也看不出选中。 */
+.qj-menu-segments {
+  display: flex;
+  gap: 2px;
+  margin: 2px 4px 6px;
+  padding: 2px;
+  border: 1px solid var(--qj-border);
+  border-radius: max(6px, calc(var(--qj-radius) - 6px));
+  background: color-mix(in oklab, var(--qj-text) 6%, transparent);
+}
+
+.qj-menu-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--qj-text-light);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.qj-menu-segment:hover:not(:disabled):not(.is-selected) {
+  background: var(--qj-menu-hover);
+  color: var(--qj-text);
+}
+
+/* 选中档：抬起来一块纸色，和设置页相同。 */
+.qj-menu-segment.is-selected {
+  background: var(--qj-bg-elevated);
+  color: var(--qj-accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 10%);
+}
+
+/* 键盘走到的那一档，即使不是当前值也要看得见。 */
+.qj-menu-segment.is-active:not(.is-selected) {
+  background: var(--qj-menu-hover);
+  color: var(--qj-text);
+}
+
+.qj-menu-segment:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ */
+/* Find bar, palette, resizer                                          */
+/* ------------------------------------------------------------------ */
+
+.qj-findbar {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  border: 1px solid var(--qj-menu-border);
+  border-radius: calc(var(--qj-radius) - 2px);
+  background: var(--qj-bg-elevated);
+  box-shadow: var(--qj-menu-shadow);
+}
+
+/* Small square toggle, e.g. the find bar's case-sensitivity switch. */
+.qj-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--qj-border);
+  border-radius: max(4px, calc(var(--qj-radius) - 6px));
+  background: transparent;
+  color: var(--qj-text-light);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.qj-chip:hover {
+  background: var(--qj-bg-hover);
+  color: var(--qj-text);
+}
+
+.qj-chip--on {
+  border-color: var(--qj-accent);
+  background: var(--qj-accent-light);
+  color: var(--qj-accent);
+}
+
+.qj-text-btn {
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--qj-border);
+  border-radius: max(4px, calc(var(--qj-radius) - 6px));
+  background: transparent;
+  color: var(--qj-text);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.qj-text-btn:hover:not(:disabled) {
+  background: var(--qj-bg-hover);
+}
+
+.qj-text-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Divider between the sidebar and the editor. The negative margins let it sit
+ * on top of the sidebar's border instead of adding a visible gap. */
+.qj-resizer {
+  z-index: 20;
+  width: 5px;
+  flex-shrink: 0;
+  margin-right: -2px;
+  margin-left: -3px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 140ms ease;
+}
+
+.qj-resizer:hover,
+.qj-resizer--active {
+  background: color-mix(in oklab, var(--qj-accent) 45%, transparent);
+}
+
+.modal__dialog.qj-palette {
+  width: min(560px, 92vw);
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--qj-radius);
+  box-shadow: var(--qj-shadow);
+}
+
+/* ------------------------------------------------------------------ */
+/* Theme preview                                                       */
+/* ------------------------------------------------------------------ */
+
+/* A miniature of the app so choosing a theme shows the actual result.
+ *
+ * The wrapper carries `data-qj-accent`, and `theme.css` re-derives the whole
+ * paper palette for `.qj-theme-preview` elements — without that the preview
+ * would inherit the already-resolved canvas colours from <html> and every card
+ * would look identical. */
+.qj-theme-preview {
+  display: flex;
+  width: 100%;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid var(--qj-border);
+  border-radius: calc(var(--qj-radius) - 4px);
+  background: var(--qj-bg);
+}
+
+.qj-theme-preview__sidebar {
+  width: 27%;
+  border-right: 1px solid var(--qj-border);
+  background: var(--qj-bg-sidebar);
+}
+
+.qj-theme-preview__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.qj-theme-preview__toolbar {
+  height: 26%;
+  border-bottom: 1px solid var(--qj-border);
+  background: var(--qj-bg-toolbar);
+}
+
+.qj-theme-preview__paper {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 9px;
+  background: var(--qj-bg-paper);
+}
+
+.qj-theme-preview__line {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--qj-text-light);
+  opacity: 0.55;
+}
+
+.qj-theme-preview__line--short {
+  width: 58%;
+}
+
+.qj-theme-preview__accent {
+  width: 36%;
+  height: 4px;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: var(--qj-accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Scrollbars                                                          */
+/* ------------------------------------------------------------------ */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--separator) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--separator);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--qj-accent) 50%, var(--qj-border));
+  background-clip: content-box;
+}
+
+/* ------------------------------------------------------------------ */
+/* Printing                                                            */
+/* ------------------------------------------------------------------ */
+
+/* `Ctrl+P` hands the page to the OS print dialog, so everything that is not the
+ * document has to drop out: the sidebar, toolbars, status bar and every
+ * floating panel would otherwise be printed as part of the page. */
+@media print {
+  .qj-sidebar,
+  .qj-toolbar,
+  .qj-resizer,
+  .status-bar,
+  .qj-findbar,
+  aside,
+  .modal__backdrop,
+  .qj-popover {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  .qj-root,
+  .editor-scroll {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* The editor's own padding exists to make room for its block handle, which
+   * does not print. */
+  .milkdown .ProseMirror {
+    padding: 0 !important;
+  }
+
+  .editor-column {
+    max-width: none !important;
+  }
+}

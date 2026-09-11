@@ -1,0 +1,361 @@
+/* Milkdown / Crepe integration.
+ *
+ * Crepe ships themes that contain nothing but `--crepe-*` variables, so the
+ * palette is defined here instead and wired to HeroUI's semantic tokens. The
+ * editor therefore follows light/dark with the rest of the app.
+ *
+ * One thing to know about Crepe: `--crepe-color-outline` is a Material-style
+ * mid-tone that doubles as the icon foreground for every menu, and
+ * `--crepe-color-surface` is the shared background of every popup. Mapping the
+ * former to a hairline and the latter to the paper colour is what made menus
+ * read as unlabelled grey slabs. */
+
+.milkdown {
+  --crepe-color-background: transparent;
+  --crepe-color-on-background: var(--foreground);
+
+  /* `--crepe-color-surface` 是所有浮层（选区工具条、斜杠菜单、链接气泡、
+     表格手柄、代码语言选择器、AI 面板）的底面，Crepe 只给了这一个变量。
+     它原先指向纸面色，等于让菜单和页面同色、直接隐形，因此改指弹层色。 */
+  --crepe-color-surface: var(--qj-bg-elevated);
+  --crepe-color-surface-low: var(--qj-bg-elevated-low);
+
+  --crepe-color-on-surface: var(--foreground);
+  --crepe-color-on-surface-variant: var(--muted);
+
+  /* Crepe 的 `outline` 是 Material 里的中性轮廓色（原主题取 #817567），
+     同时被当作工具条、斜杠菜单、拖拽手柄、任务列表图标的前景色，还被
+     以 20% 透明度混作分割线。指向 --separator（发丝线色）时图标几乎看
+     不见——这正是菜单“只有灰块、看不清字”的原因。 */
+  --crepe-color-outline: var(--qj-menu-icon);
+
+  --crepe-color-primary: var(--accent);
+  --crepe-color-secondary: var(--default);
+  --crepe-color-on-secondary: var(--default-foreground);
+  --crepe-color-inverse: var(--background-inverse);
+  --crepe-color-on-inverse: var(--background);
+  --crepe-color-inline-code: var(--danger);
+  --crepe-color-error: var(--danger);
+  --crepe-color-hover: var(--qj-menu-hover);
+  --crepe-color-selected: var(--qj-menu-selected);
+  /* `--field` 在 HeroUI v3 里并不存在，行内代码底色一直解析失败。 */
+  --crepe-color-inline-area: var(--default);
+
+  /* `--crepe-base-font-size` is used inside calc() for every scale step, so it
+   * must be a length. EditorPane overrides it with the user's font size.
+   * Font families and the code palette are defined in `theme.css`. */
+  --crepe-base-font-size: 16px;
+
+  /* Previously `none`, which flattened every menu into the page. */
+  --crepe-shadow-1: var(--qj-menu-shadow);
+  --crepe-shadow-2: var(--qj-menu-shadow);
+}
+
+/* Crepe 的浮层一律自带阴影，但深色下阴影几乎不可见，只有描边能把菜单
+   从纸面上“抬”起来。多叠一层 `.milkdown-host` 是为了把权重抬到 0,3,0，
+   稳定压过 Crepe 自身的 `.milkdown .…` 规则，不依赖样式表加载顺序。 */
+.milkdown-host .milkdown .milkdown-toolbar,
+.milkdown-host .milkdown .milkdown-slash-menu,
+.milkdown-host .milkdown .milkdown-link-preview > .link-preview,
+.milkdown-host .milkdown .milkdown-link-edit > .link-edit,
+.milkdown-host .milkdown .milkdown-latex-inline-edit,
+.milkdown-host .milkdown .milkdown-top-bar .top-bar-heading-dropdown,
+.milkdown-host .milkdown .milkdown-table-block .cell-handle,
+.milkdown-host .milkdown .milkdown-table-block .cell-handle .button-group,
+.milkdown-host .milkdown .milkdown-table-block .line-handle .add-button {
+  border: 1px solid var(--qj-menu-border);
+}
+
+.milkdown .ProseMirror {
+  padding: 44px 56px 200px;
+  outline: none;
+}
+
+.milkdown .ProseMirror code {
+  border: 1px solid var(--separator);
+  border-radius: 4px;
+}
+
+/* The editor column owns the height; the scroll container does the scrolling. */
+.editor-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.editor-column {
+  margin: 0 auto;
+  width: 100%;
+  min-height: 100%;
+}
+
+.milkdown-host {
+  min-height: 100%;
+}
+
+/* ---------- 源代码模式 ----------
+   The textarea is sized from its own scroll height by EditorPane, so nothing
+   scrolls it internally and the page keeps a single scroll container. */
+
+/* ---------- YAML 元数据 ----------
+   The rich-text surface has no node for the block — Markdown would read its
+   delimiters as a rule and a heading — so it is lifted off on the way in and a
+   single marker line stands in for it above the document. */
+
+.qj-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 18px 56px 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--separator);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.qj-meta-bar__tag {
+  flex-shrink: 0;
+  padding: 0.0625rem 0.375rem;
+  border: 1px solid var(--separator);
+  border-radius: 4px;
+  font-family: var(--qj-font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+
+.qj-meta-bar__keys {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.qj-meta-bar__edit {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0.125rem 0.375rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.qj-meta-bar__edit:hover {
+  background: var(--qj-bg-hover);
+  color: var(--qj-text);
+}
+
+/* The marker line already opens the page, so the editor's own top padding is
+   trimmed to keep the gap between the two from doubling. */
+.editor-column--meta .milkdown .ProseMirror {
+  padding-top: 12px;
+}
+
+.qj-source-editor {
+  display: block;
+  width: 100%;
+  min-height: 100%;
+  padding: 44px 56px 200px;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: var(--qj-text);
+  font-family: var(--qj-code-font-stack, var(--qj-font-mono));
+  font-size: var(--qj-code-font-size, 14px);
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+/* ---------- 专注模式 ----------
+   段落的类一直挂在 DOM 上，视觉由编辑器宿主上的 .qj-focus-mode 控制。
+   这样切换模式只是换一个类，不必重建编辑器、也不会丢掉撤销历史。 */
+
+.qj-focus-mode .qj-block--dim {
+  opacity: 0.3;
+  transition: opacity 180ms ease;
+}
+
+.qj-focus-mode .qj-block--active {
+  opacity: 1;
+}
+
+/* ---------- 查找高亮 ---------- */
+
+.milkdown .qj-search-hit {
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--qj-accent) 22%, transparent);
+}
+
+.milkdown .qj-search-hit--current {
+  background: color-mix(in oklab, var(--qj-accent) 55%, transparent);
+  box-shadow: 0 0 0 1px var(--qj-accent);
+}
+
+/* ---------- 对齐 ----------
+   装饰插件把 qj-align--* 挂到段落、标题和图片块上（见 lib/editor/align-plugin.ts）。
+   段落/标题靠 `text-align` 定位；图片块的规则在下面单独写，因为图片是靠
+   外框的自动外边距定位的，`text-align` 对它没有作用。
+
+   `:not(.milkdown-image-block)` 把两类分开，否则图片块也会被套上 text-align。 */
+
+[data-qj-codebg] .milkdown .ProseMirror .qj-align--left:not(.milkdown-image-block) {
+  text-align: left;
+}
+
+[data-qj-codebg] .milkdown .ProseMirror .qj-align--center:not(.milkdown-image-block) {
+  text-align: center;
+}
+
+[data-qj-codebg] .milkdown .ProseMirror .qj-align--right:not(.milkdown-image-block) {
+  text-align: right;
+}
+
+/* ---------- 图片块：对齐 ----------
+   对齐方式存在图片地址的 fragment 里（见 lib/editor/image-align.ts）。
+
+   `[data-qj-codebg]` 前缀和 theme.css 里的图片规则同源：`.image-wrapper`
+   被 Crepe 设为 `margin-inline: auto`，两边的选择器权重本来就持平，
+   加上前缀才能不依赖样式表加载顺序。 */
+
+[data-qj-codebg] .milkdown .milkdown-image-block.qj-align--left > .image-wrapper {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[data-qj-codebg] .milkdown .milkdown-image-block.qj-align--center > .image-wrapper {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+[data-qj-codebg] .milkdown .milkdown-image-block.qj-align--right > .image-wrapper {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* ---------- 图片块：图注 ----------
+   图注要贴着图片，而不是铺满整列。宽度由 align-plugin 里的 ResizeObserver
+   写成 `--qj-caption-w`（等于图片的渲染宽度），外边距再把它推到与图片同侧，
+   这样右侧窄图的说明文字也不会跑到列的另一端去。
+   文字在图片宽度内居中，与图片本身靠哪边无关。 */
+
+[data-qj-codebg] .milkdown .milkdown-image-block > .caption-input {
+  width: var(--qj-caption-w, 100%);
+  max-width: 100%;
+  text-align: center;
+}
+
+[data-qj-codebg] .milkdown .milkdown-image-block.qj-align--left > .caption-input {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[data-qj-codebg] .milkdown .milkdown-image-block.qj-align--center > .caption-input {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+[data-qj-codebg] .milkdown .milkdown-image-block.qj-align--right > .caption-input {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* ---------- 图片块：尺寸手柄 ----------
+   Crepe 给的是一条 4px 高、只在悬停时出现的细线，几乎看不见。这里把可抓
+   区域加高，用一条常驻的圆角把柄做视觉提示，悬停和选中时都显示。
+   把柄画在图片内部的下缘，不跨到底边外面，否则会压到图注那一行的顶上。 */
+
+[data-qj-codebg] .milkdown .milkdown-image-block > .image-wrapper > .image-resize-handle {
+  height: 16px;
+  width: 100%;
+  max-width: 160px;
+  bottom: 0;
+  background: transparent;
+}
+
+[data-qj-codebg]
+  .milkdown
+  .milkdown-image-block
+  > .image-wrapper
+  > .image-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 4px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--qj-menu-icon);
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+[data-qj-codebg]
+  .milkdown
+  .milkdown-image-block
+  > .image-wrapper
+  > .image-resize-handle:hover::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+/* 选中图片时也让手柄和菜单可见，不必先猜到要悬停。 */
+[data-qj-codebg]
+  .milkdown
+  .milkdown-image-block.selected
+  > .image-wrapper
+  > .image-resize-handle,
+[data-qj-codebg] .milkdown .milkdown-image-block.selected > .image-wrapper .operation {
+  opacity: 1;
+}
+
+/* ---------- 图片块：图注开关 ----------
+   位置回到图片右上角（保持原样），但不再是一个气泡：无底色、无描边、无投影、
+   无内边距，就是两个字。它只在悬停或选中时出现，所以对图片的遮挡是可控的。 */
+
+[data-qj-codebg] .milkdown .milkdown-image-block > .image-wrapper .operation {
+  top: 8px;
+  right: 10px;
+  gap: 4px;
+}
+
+[data-qj-codebg]
+  .milkdown
+  .milkdown-image-block
+  > .image-wrapper
+  .operation
+  > .operation-item {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--qj-text-light);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 1;
+  transition: color 120ms ease;
+}
+
+[data-qj-codebg]
+  .milkdown
+  .milkdown-image-block
+  > .image-wrapper
+  .operation
+  > .operation-item:hover {
+  color: var(--accent);
+}
