@@ -1,4 +1,5 @@
 mod cli;
+mod cleanup;
 mod commands;
 mod db;
 mod error;
@@ -54,6 +55,9 @@ pub fn run() {
             }
 
             app.manage(AppState::new(pool, notice));
+
+            // 上一次自动更新留下的安装包还在临时目录里，趁现在删掉（失败也无所谓）。
+            cleanup::remove_stale_updater_dirs(&app.package_info().name);
 
             // 双击 .md 启动时，文件路径在命令行里。此刻前端还没跑起来，所以先
             // 存进状态，等它启动完自己来取。取不到就是普通启动，不影响任何事。
