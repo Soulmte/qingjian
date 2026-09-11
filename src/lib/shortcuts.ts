@@ -13,6 +13,14 @@ export interface ShortcutEntry {
   description: string;
   /** Why an entry is not implemented, or how its key differs from Typora. */
   note?: string;
+  /**
+   * 明确标为未实现。
+   *
+   * 多数条目靠「这个键有没有被绑定」就能判断，但有一种情况推断不出来：键位
+   * 存在、却被另一个命令占着（如 Ctrl+Shift+L 归了侧边栏切换，左对齐就没份）。
+   * 这种情况必须显式写明，否则页面上会顶着「可用」的标签。
+   */
+  pending?: boolean;
 }
 
 export interface ShortcutGroup {
@@ -134,7 +142,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       {
         chords: ["Ctrl+Shift+L"],
         description: "左对齐",
-        note: "与「显示 / 隐藏侧边栏」冲突；左对齐请用顶部工具栏的对齐按钮，居中与右对齐在 Ctrl+Shift+E / R",
+        pending: true,
+        note: "该键位归了「显示 / 隐藏侧边栏」；左对齐请用顶部工具栏的对齐按钮，居中与右对齐在 Ctrl+Shift+E / R",
       },
     ],
   },
@@ -190,6 +199,7 @@ export function boundBindings(): Set<string> {
 
 /** Whether an entry is genuinely implemented: every chord it lists is bound. */
 export function isActive(entry: ShortcutEntry, bound = boundBindings()): boolean {
+  if (entry.pending) return false;
   return entry.chords.length > 0 && entry.chords.every((chord) => bound.has(chord));
 }
 
