@@ -120,20 +120,30 @@ export default function App() {
    * 更新已经下好、而用户直接关软件时，顺手把更新装上。
    *
    * 这次传 `restartAfterInstall: false`：用户是在关它，不是在重启它，不该替他
-   * 把窗口再拉起来。拦下关闭请求是因为安装程序要先起来本进程才能退——真正退出
-   * 是 `install` 内部做的；`close` 只是万一它抛错时的退路。
+   * 把窗口再拉起来。真正退出是 `install` 内部启动安装程序后 `exit` 本进程；
+   * `destroy` 是万一它没走到那一步的退路。
+   *
+   * 这里一旦 `preventDefault`，窗口的关闭就只能由本函数负责到底：`@tauri-apps`
+   * 的默认处理不会再搭手。所以每条分支都要保证窗口最后真的关掉——处理器里抛出的
+   * 异常同样会跳过默认销毁，把人卡在一个关不掉的窗口里。
    */
   useEffect(() => {
     const current = getCurrentWindow();
-    let closing = false;
+    let takingOver = false;
 
     const unlisten = current.onCloseRequested(async (event) => {
-      if (closing) return;
+      if (takingOver) return;
+
       const { staged, installing } = useUpdate.getState();
+      // 没有待安装的更新，或安装已经在跑：什么都不做，交给默认处理关窗。
       if (!staged || installing) return;
 
+      takingOver = true;
       event.preventDefault();
-      closing = true;
+
+      // 安装程序万一没把进程带走（它本该 `exit`），也别让窗口留在这里：
+      // 超时后强制关闭。正常安装走不到这一步。
+      const watchdog = window.setTimeout(() => void current.destroy(), 15_000);
       try {
         await useWorkspace.getState().flushSave();
         await staged.install({ restartAfterInstall: false });
@@ -141,7 +151,8 @@ export default function App() {
         // 装不上就照常关，别把用户卡在开着的窗口里
         useUpdate.getState().clear();
       } finally {
-        void current.close();
+        window.clearTimeout(watchdog);
+        void current.destroy();
       }
     });
 
