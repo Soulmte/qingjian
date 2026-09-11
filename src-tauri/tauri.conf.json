@@ -39,6 +39,12 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "wix": {
+        "language": ["zh-CN"],
+        "upgradeCode": "76718746-ec69-5276-8b16-2662f86e5b52"
+      }
+    }
   }
 }
