@@ -114,6 +114,12 @@ export const api = {
   // App
   /** One-shot explanation of a startup recovery; cleared once read. */
   takeStartupNotice: () => invoke<string | null>("take_startup_notice"),
+  /**
+   * 启动参数里要打开的文件，取一次就清空。
+   *
+   * 双击 `.md` 时系统会把文件路径当第一个参数传进来，由 Rust 侧暂存。
+   */
+  takeOpenFile: () => invoke<string | null>("take_open_file"),
 
   // Updates
   /**

@@ -133,11 +133,9 @@ function splitPath(path: string): { dirname: string; basename: string } {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Opens a Markdown file from anywhere on disk.
+ * 从磁盘上任意位置打开一个 Markdown 文件。
  *
- * Notes are workspace-relative, so the file is adopted first: its folder
- * becomes (or is matched against) a workspace, then the note is selected by its
- * path inside that folder.
+ * 先弹原生文件对话框选文件，再交给 `openPathFromDisk`。
  */
 async function openFile(): Promise<void> {
   const picked = await open({
@@ -145,7 +143,19 @@ async function openFile(): Promise<void> {
     filters: [{ name: "Markdown", extensions: ["md", "markdown", "txt"] }],
   });
   if (typeof picked !== "string") return;
+  await openPathFromDisk(picked);
+}
 
+/**
+ * 打开一个已知路径的文件。
+ *
+ * 笔记是工作区相对的，所以先「认领」这个文件：它所在的文件夹要么匹配已有
+ * 工作区，要么被添加为一个，然后按它在文件夹里的相对路径选中笔记。
+ *
+ * 这条路径也是**双击 .md 时的入口**——路径由命令行交过来（见
+ * `take_open_file`），与手动点「打开文件」走的是同一段逻辑。
+ */
+export async function openPathFromDisk(picked: string): Promise<void> {
   const { dirname, basename } = splitPath(picked);
 
   try {

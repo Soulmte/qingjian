@@ -17,7 +17,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { runMatchingCommand } from "@/lib/commands";
+import { runMatchingCommand, openPathFromDisk } from "@/lib/commands";
 import { useThemeSync } from "@/lib/theme";
 import { checkForUpdates } from "@/lib/update";
 import { useSettings } from "@/stores/settings";
@@ -89,6 +89,11 @@ export default function App() {
       await initWorkspace();
       // Read after the workspace is up, so a rebuilt index is already reflected.
       setStartupNotice(await api.takeStartupNotice().catch(() => null));
+
+      // 双击 .md 启动时，文件路径是命令行给的。放在最后取：这时工作区已经
+      // 就绪，「认领文件所在目录」那套逻辑才跑得起来。
+      const requested = await api.takeOpenFile().catch(() => null);
+      if (requested) await openPathFromDisk(requested);
 
       // 更新检查排在最后，而且刻意不拦住启动：它要联网，慢起来无上限。
       // 从 store 现读设置，因为上面那次 await 之后 loadSettings 才刚写完值。

@@ -1,3 +1,4 @@
+mod cli;
 mod commands;
 mod db;
 mod error;
@@ -51,6 +52,14 @@ pub fn run() {
             }
 
             app.manage(AppState::new(pool, notice));
+
+            // 双击 .md 启动时，文件路径在命令行里。此刻前端还没跑起来，所以先
+            // 存进状态，等它启动完自己来取。取不到就是普通启动，不影响任何事。
+            let pending = cli::markdown_path_in_args(std::env::args().skip(1));
+            if let Some(state) = app.try_state::<AppState>() {
+                state.remember_open_request(pending);
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -86,6 +95,7 @@ pub fn run() {
             commands::update::open_external,
             commands::update::reveal_downloaded,
             state::take_startup_notice,
+            state::take_open_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
