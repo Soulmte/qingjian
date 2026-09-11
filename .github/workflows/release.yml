@@ -1,0 +1,63 @@
+name: 发布
+
+# 推一个 v* 的 tag，就跑测试、构建 Windows 安装包，并挂到同名 Release 上。
+# 手动触发不在支持范围内：Release 必须对应一个 tag，否则版本号没有出处。
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    # tauri-action 要建 Release、传附件，需要写权限
+    permissions:
+      contents: write
+
+    steps:
+      - name: 取出代码
+        uses: actions/checkout@v4
+
+      - name: 装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: 装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # 缓存 target/，否则每次都从头编 400 多个 crate
+      - name: 缓存 Rust 构建产物
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 装前端依赖
+        run: npm ci
+
+      # 先过测试再发布：这一版已经打上 tag，坏了就不该发出去
+      - name: 前端测试
+        run: npm test
+
+      - name: 前端类型检查
+        run: npm run typecheck
+
+      - name: Rust 测试
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      # tagName 用触发这次运行的 tag，所以 Release 与 tag 天然对齐
+      - name: 构建并发布
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "青简 ${{ github.ref_name }}"
+          releaseBody: |
+            安装包见下方 Assets。`x64-setup.exe` 是单文件安装包，推荐；`x64_zh-CN.msi` 供静默部署使用。
+
+            系统要求见仓库 README 的「下载与安装」一节。
+          releaseDraft: false
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc
