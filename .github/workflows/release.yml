@@ -66,17 +66,32 @@ jobs:
           GH_TAG: ${{ github.ref_name }}
         run: |
           $version = "$env:GH_TAG".TrimStart('v')
+          $nsis = "src-tauri/target/release/bundle/nsis"
+          $msi = "src-tauri/target/release/bundle/msi"
           New-Item -ItemType Directory -Force -Path out | Out-Null
 
-          Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.exe" "out/Qingjian_${version}_x64-setup.exe"
-          Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.nsis.zip" "out/Qingjian_${version}_x64-setup.nsis.zip"
-          Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.nsis.zip.sig" "out/Qingjian_${version}_x64-setup.nsis.zip.sig"
-          Copy-Item "src-tauri/target/release/bundle/msi/*.msi" "out/Qingjian_${version}_x64_zh-CN.msi"
+          # 安装程序本体（给手动安装的用户）与 MSI，同样只换 ASCII 名
+          Copy-Item "$nsis/*-setup.exe" "out/Qingjian_${version}_x64-setup.exe"
+          Copy-Item "$msi/*.msi" "out/Qingjian_${version}_x64_zh-CN.msi"
+
+          # 更新器真正要下载的那一份，连同它的签名（.sig 的内容会写进 latest.json）。
+          # Tauri 2.x 默认直接给 .exe 本体签名（createUpdaterArtifacts: true）；
+          # 若换成 v1Compatible 兼容格式，则会多包一层 .nsis.zip，两种都认。
+          $zip = Get-ChildItem "$nsis/*-setup.nsis.zip" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($zip) {
+            $payload = "Qingjian_${version}_x64-setup.nsis.zip"
+            Copy-Item $zip.FullName "out/$payload"
+            Copy-Item "$($zip.FullName).sig" "out/${payload}.sig"
+          } else {
+            $payload = "Qingjian_${version}_x64-setup.exe"
+            Copy-Item "$nsis/*-setup.exe.sig" "out/${payload}.sig"
+          }
 
           # latest.json 是更新器的入口：版本、更新说明、每个平台更新包的地址与签名。
           # 更新器只认 windows-x86_64 这个键名。
-          $signature = (Get-Content "out/Qingjian_${version}_x64-setup.nsis.zip.sig" -Raw).Trim()
-          $url = "https://github.com/$env:GH_REPO/releases/download/$env:GH_TAG/Qingjian_${version}_x64-setup.nsis.zip"
+          $signature = (Get-Content "out/${payload}.sig" -Raw).Trim()
+          $url = "https://github.com/$env:GH_REPO/releases/download/$env:GH_TAG/$payload"
           $manifest = @{
             version = $version
             notes = (Get-Content release-notes.md -Raw)
