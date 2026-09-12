@@ -41,10 +41,14 @@ import type { ReactNode } from "react";
 import type { ExportFormat } from "@/types";
 
 import { api, errorMessage } from "@/lib/api";
-import type { Align } from "@/lib/editor/align";
-import { applyAlign, selectedBlock } from "@/lib/editor/align-selection";
-import { clearFormatting, deleteLine, selectLine } from "@/lib/editor/actions";
-import { armPlainPaste, getActiveEditorView, runInsertMarkdown } from "@/lib/editor/bridge";
+import { type Align } from "@/lib/editor/align";
+import { alignmentForUi } from "@/lib/editor/align-selection";
+import { applyAlignment, clearFormatting, deleteLine, selectLine } from "@/lib/editor/actions";
+import {
+  armPlainPaste,
+  getActiveEditorView,
+  runInsertMarkdown,
+} from "@/lib/editor/bridge";
 import { parseMarkdown } from "@/lib/export/ir";
 import {
   EXPORT_FILTERS,
@@ -326,29 +330,27 @@ async function printNote(): Promise<void> {
   }
 }
 
-/** Whether the caret sits on something the alignment commands can move. */
-function hasAlignableBlock(): boolean {
+/**
+ * Whether the caret sits on something an alignment command can move.
+ *
+ * A table cell counts: there the chord aligns the column, which the GFM preset
+ * performs, so the buttons must not be greyed out just because a cell paragraph
+ * is not a block `applyAlign` can re-place.
+ */
+function canAlign(): boolean {
   const view = getActiveEditorView();
-  return view !== null && selectedBlock(view.state) !== null;
+  return view !== null && alignmentForUi(view.state) !== null;
 }
 
 /**
- * Moves the selected block within the text column.
+ * Aligns what the caret is in: a table column, or the surrounding block.
  *
- * One command covers both kinds of block: an image is re-placed through its URL
- * fragment, a paragraph or heading through its `align` attribute. They share a
- * button because the user is asking the same question — "which side?" — and
- * only the storage differs.
+ * The choice between the two is `applyAlignment`'s; this only finds the editor.
  */
 function alignBlock(align: Align): boolean {
   const view = getActiveEditorView();
   if (!view) return false;
-
-  const transaction = applyAlign(view.state, align);
-  if (!transaction) return false;
-
-  view.dispatch(transaction);
-  return true;
+  return applyAlignment(view, align);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -626,7 +628,7 @@ export const APP_COMMANDS: AppCommand[] = [
     // Typora's Ctrl+Shift+L is taken by the sidebar toggle; the shortcuts page
     // records that, and the top bar carries the button without a chord.
     toolbar: true,
-    enabled: hasAlignableBlock,
+    enabled: canAlign,
     run: () => void alignBlock("left"),
   },
   {
@@ -638,7 +640,7 @@ export const APP_COMMANDS: AppCommand[] = [
     shortcut: "Ctrl+Shift+E",
     accel: { key: "e", mod: true, shift: true },
     toolbar: true,
-    enabled: hasAlignableBlock,
+    enabled: canAlign,
     run: () => void alignBlock("center"),
   },
   {
@@ -650,7 +652,7 @@ export const APP_COMMANDS: AppCommand[] = [
     shortcut: "Ctrl+Shift+R",
     accel: { key: "r", mod: true, shift: true },
     toolbar: true,
-    enabled: hasAlignableBlock,
+    enabled: canAlign,
     run: () => void alignBlock("right"),
   },
 

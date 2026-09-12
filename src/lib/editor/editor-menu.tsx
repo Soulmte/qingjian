@@ -49,8 +49,12 @@ import {
   type ContextMenuEntry,
   type ContextMenuItem,
 } from "@/lib/context-menu";
-import { clearFormatting, type EditableHost } from "@/lib/editor/actions";
-import { IMAGE_BLOCK, applyAlign, selectedBlock } from "@/lib/editor/align-selection";
+import {
+  IMAGE_BLOCK,
+  alignmentForUi,
+  selectedBlock,
+} from "@/lib/editor/align-selection";
+import { applyAlignment, clearFormatting, type EditableHost } from "@/lib/editor/actions";
 import { runEditorCommand } from "@/lib/editor/bridge";
 import { stripAlignment } from "@/lib/editor/image-align";
 import { buildNoteMenu } from "@/lib/note-menu";
@@ -84,6 +88,9 @@ const ALIGN_ICON = {
 export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
   const { state } = view;
   const target = selectedBlock(state);
+  // Inside a table the alignment rows drive the column instead of a block, so
+  // what they show as active comes from the cell rather than from `target`.
+  const alignment = alignmentForUi(state);
   const imageSrc =
     target && target.node.type.name === IMAGE_BLOCK ? String(target.node.attrs.src) : null;
 
@@ -271,11 +278,10 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
             icon: ALIGN_ICON[align],
             chord:
               align === "center" ? "Ctrl+Shift+E" : align === "right" ? "Ctrl+Shift+R" : undefined,
-            selected: target?.align === align,
-            disabled: target === null,
+            selected: alignment === align,
+            disabled: alignment === null,
             run: () => {
-              const transaction = applyAlign(view.state, align);
-              if (transaction) view.dispatch(transaction);
+              applyAlignment(view, align);
               view.focus();
             },
           })),

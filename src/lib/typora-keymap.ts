@@ -10,7 +10,7 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { insertTableCommand, setAlignCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
+import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
 import type { Command } from "@milkdown/kit/prose/state";
 import { $useKeymap } from "@milkdown/kit/utils";
 
@@ -67,8 +67,10 @@ export const typoraKeymap = $useKeymap("typoraKeymap", {
   Link: { shortcuts: "Mod-k", command: dispatch(toggleLinkCommand) },
 
   Strikethrough: { shortcuts: "Alt-Shift-5", command: dispatch(toggleStrikethroughCommand) },
-  // Typora's alignment applies to tables and images; the table column is what
-  // the GFM schema can express here.
-  AlignCenter: { shortcuts: "Mod-Shift-e", command: dispatch(setAlignCommand, "center") },
-  AlignRight: { shortcuts: "Mod-Shift-r", command: dispatch(setAlignCommand, "right") },
+
+  // The alignment chords are deliberately absent. They are owned by the app's
+  // `format.align*` commands, which align a block or an image and delegate to
+  // the GFM preset when the caret is inside a table. Binding them here as well
+  // meant the same chord was claimed twice, and which one applied came down to
+  // plugin ordering.
 });

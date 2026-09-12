@@ -63,6 +63,11 @@ export function ToolbarButton({
       aria-label={label}
       aria-pressed={active}
       disabled={disabled}
+      // Chrome must not keep the focus a click gives it: ProseMirror binds its
+      // keymap on its own editable element, so focus resting on a toolbar button
+      // makes every editor chord (Ctrl+1…6, Ctrl+K, Ctrl+T …) do nothing until
+      // the text is clicked again. Keyboard users still reach the button with Tab.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={onPress}
     >
       {children}

@@ -16,7 +16,7 @@ import {
   type ClipboardImagePlan,
 } from "@/lib/clipboard-image";
 import { alignPlugin, alignedHeadingSchema, alignedParagraphSchema, remarkBlockAlignPlugin } from "@/lib/editor/align-plugin";
-import { selectedBlock } from "@/lib/editor/align-selection";
+import { alignmentForUi } from "@/lib/editor/align-selection";
 import {
   consumePlainPaste,
   notifyEditorChanged,
@@ -346,8 +346,7 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
   useEffect(() => {
     const sync = () => {
       const view = viewRef.current;
-      const target = view ? selectedBlock(view.state) : null;
-      useUi.getState().setBlockAlign(target?.align ?? null);
+      useUi.getState().setBlockAlign(view ? alignmentForUi(view.state) : null);
     };
 
     const unsubscribe = subscribeEditor(sync);

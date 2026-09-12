@@ -14,6 +14,26 @@ export const IMAGE_BLOCK = "image-block";
 /** Blocks the alignment commands act on, besides images. */
 const TEXT_BLOCKS = new Set(["paragraph", "heading"]);
 
+/** Node names the GFM table feature registers. */
+const TABLE_NODES = new Set(["table", "table_row", "table_cell", "table_header"]);
+
+/**
+ * Whether the selection sits inside a GFM table.
+ *
+ * The alignment chord means two different things depending on this: on a table
+ * the GFM preset aligns a *column* through a cell attribute, everywhere else
+ * this module aligns a block or an image. A cell's paragraph is not a top-level
+ * block, so `selectedBlock` reports nothing there — the two meanings never
+ * overlap, and the caller picks between them rather than letting both fire.
+ */
+export function isInTable(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth >= 0; depth -= 1) {
+    if (TABLE_NODES.has($from.node(depth).type.name)) return true;
+  }
+  return false;
+}
+
 export interface AlignTarget {
   pos: number;
   node: Node;
@@ -27,6 +47,30 @@ export function alignOfNode(node: Node): Align | null {
     return isAlign(node.attrs.align) ? node.attrs.align : "left";
   }
   return null;
+}
+
+/**
+ * The alignment to report for the selection: the column's inside a table, the
+ * block's everywhere else, `null` when there is nothing to align.
+ *
+ * This doubles as the "can the alignment commands be used" question — a table
+ * cell counts, because there the commands act on the column, and its paragraph
+ * being nested is what `selectedBlock` deliberately rejects.
+ */
+export function alignmentForUi(state: EditorState): Align | null {
+  if (isInTable(state)) {
+    const { $from } = state.selection;
+    for (let depth = $from.depth; depth >= 0; depth -= 1) {
+      const node = $from.node(depth);
+      if (node.type.name !== "table_cell" && node.type.name !== "table_header") continue;
+      // GFM leaves the attribute unset for a column that has never been aligned,
+      // which reads as left.
+      return isAlign(node.attrs.alignment) ? node.attrs.alignment : "left";
+    }
+    return "left";
+  }
+
+  return selectedBlock(state)?.align ?? null;
 }
 
 /**

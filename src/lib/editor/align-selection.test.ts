@@ -2,7 +2,13 @@ import { Schema, type Node as PmNode } from "@milkdown/kit/prose/model";
 import { EditorState, NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { describe, expect, it } from "vitest";
 
-import { applyAlign, alignOfNode, selectedBlock } from "@/lib/editor/align-selection";
+import {
+  alignOfNode,
+  alignmentForUi,
+  applyAlign,
+  isInTable,
+  selectedBlock,
+} from "@/lib/editor/align-selection";
 
 /**
  * A stand-in for the editor's schema, holding only what the selection logic
@@ -28,6 +34,22 @@ const schema = new Schema({
       content: "block+",
       group: "block",
       toDOM: () => ["blockquote", 0],
+    },
+    // Only the names matter here: `isInTable` keys off the node types the GFM
+    // preset registers, not off any behaviour of its own.
+    table: {
+      content: "table_row+",
+      group: "block",
+      toDOM: () => ["table", 0],
+    },
+    table_row: {
+      content: "table_cell+",
+      toDOM: () => ["tr", 0],
+    },
+    table_cell: {
+      content: "block+",
+      attrs: { alignment: { default: null } },
+      toDOM: () => ["td", 0],
     },
     "image-block": {
       group: "block",
@@ -155,6 +177,69 @@ describe("applyAlign", () => {
     const quote = schema.node("blockquote", null, [paragraph("引用")]);
     const state = stateOf(docOf(quote), (doc) => TextSelection.create(doc, 2));
     expect(applyAlign(state, "center")).toBeNull();
+  });
+});
+
+describe("isInTable", () => {
+  /** One cell holding one paragraph, which is where a caret inside a table sits. */
+  function tableState() {
+    const cell = schema.node("table_cell", null, [paragraph("单元格")]);
+    const table = schema.node("table", null, [schema.node("table_row", null, [cell])]);
+    // doc > table > table_row > table_cell > paragraph > text
+    return stateOf(docOf(table), (doc) => TextSelection.create(doc, 4));
+  }
+
+  it("is true for a caret inside a table cell", () => {
+    expect(isInTable(tableState())).toBe(true);
+  });
+
+  it("is false for a caret in a top-level paragraph", () => {
+    const state = stateOf(docOf(paragraph("正文")), (doc) => TextSelection.create(doc, 1));
+    expect(isInTable(state)).toBe(false);
+  });
+
+  it("is false for a selected image", () => {
+    const image = schema.node("image-block", { src: "assets/a.png" });
+    const state = stateOf(docOf(image), (doc) => NodeSelection.create(doc, 0));
+    expect(isInTable(state)).toBe(false);
+  });
+
+  it("keeps the two meanings apart: nothing to block-align inside a cell", () => {
+    // This is what lets one chord own both behaviours — the branch is decided by
+    // `isInTable`, and at most one of the two ever finds a target.
+    expect(selectedBlock(tableState())).toBeNull();
+  });
+});
+
+describe("alignmentForUi", () => {
+  /** A one-cell table with the caret in that cell; `alignment` is the column's. */
+  function cellState(alignment: string | null) {
+    const cell = schema.node("table_cell", { alignment }, [paragraph("单元格")]);
+    const table = schema.node("table", null, [schema.node("table_row", null, [cell])]);
+    return stateOf(docOf(table), (doc) => TextSelection.create(doc, 4));
+  }
+
+  it("reads the column's alignment inside a table", () => {
+    expect(alignmentForUi(cellState("center"))).toBe("center");
+  });
+
+  it("reads a column that has never been aligned as left", () => {
+    // GFM leaves the attribute unset, which is not an `Align` — the UI has to
+    // show it as the left column it actually is.
+    expect(alignmentForUi(cellState(null))).toBe("left");
+  });
+
+  it("reads the block's alignment outside a table", () => {
+    const state = stateOf(docOf(paragraph("正文", "right")), (doc) =>
+      TextSelection.create(doc, 1),
+    );
+    expect(alignmentForUi(state)).toBe("right");
+  });
+
+  it("reports nothing where neither meaning applies", () => {
+    const quote = schema.node("blockquote", null, [paragraph("引用")]);
+    const state = stateOf(docOf(quote), (doc) => TextSelection.create(doc, 2));
+    expect(alignmentForUi(state)).toBeNull();
   });
 });
 

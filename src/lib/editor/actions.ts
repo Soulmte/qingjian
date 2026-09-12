@@ -1,5 +1,10 @@
+import { setAlignCommand } from "@milkdown/kit/preset/gfm";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
+
+import { type Align } from "./align";
+import { applyAlign, isInTable } from "./align-selection";
+import { runEditorCommand } from "./bridge";
 
 /**
  * Editor actions that ProseMirror expresses better than Markdown does.
@@ -19,6 +24,24 @@ import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit
 export interface EditableHost {
   state: EditorState;
   dispatch: (transaction: Transaction) => void;
+}
+
+/**
+ * Aligns whatever the caret is in: a table column, or the block around it.
+ *
+ * Both meanings share one chord and one set of buttons, so the choice is made
+ * here and nowhere else. A cell's paragraph is not a top-level block, so
+ * `applyAlign` would find nothing to move inside a table — the column is what
+ * the command means there, and the GFM preset owns that side of it.
+ */
+export function applyAlignment(view: EditableHost, align: Align): boolean {
+  if (isInTable(view.state)) return runEditorCommand(setAlignCommand.key, align);
+
+  const transaction = applyAlign(view.state, align);
+  if (!transaction) return false;
+
+  view.dispatch(transaction);
+  return true;
 }
 
 /** The block the cursor sits in: a paragraph, heading, list item's text, … */

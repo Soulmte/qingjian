@@ -35,4 +35,14 @@ describe("typora keymap", () => {
       expect(source).toContain(`shortcuts: "${chord}"`);
     }
   });
+
+  it("leaves the alignment chords to the app-level commands", () => {
+    // Ctrl+Shift+E/R used to be claimed twice: this keymap ran the GFM preset's
+    // table-column command, and `format.alignCenter/Right` aligned the block. The
+    // app commands now own the chord and hand a table over to the preset
+    // themselves, so binding it here again would reintroduce the ambiguity.
+    expect(source).not.toContain("Mod-Shift-e");
+    expect(source).not.toContain("Mod-Shift-r");
+    expect(source).not.toContain("setAlignCommand");
+  });
 });

@@ -54,8 +54,6 @@ const EDITOR_BINDINGS = new Set([
   "Ctrl+Shift+[",
   "Ctrl+Shift+]",
   "Ctrl+Shift+K",
-  "Ctrl+Shift+E",
-  "Ctrl+Shift+R",
   "Alt+Shift+5",
   "Tab",
   "Shift+Tab",
