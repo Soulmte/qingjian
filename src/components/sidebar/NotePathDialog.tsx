@@ -8,6 +8,13 @@ interface NotePathDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   heading: string;
   confirmLabel: string;
+  /**
+   * Whether a note or a folder is being created.
+   *
+   * A folder has no extension and no "are you sure" suffix, so the same dialog
+   * serves both instead of a near-identical second one.
+   */
+  kind?: "note" | "folder";
   /** Folder to preselect; `""` is the workspace root. */
   initialFolder?: string;
   /** Title without the `.md` extension. */
@@ -48,6 +55,7 @@ export function NotePathDialog({
   onOpenChange,
   heading,
   confirmLabel,
+  kind = "note",
   initialFolder = "",
   initialTitle = "",
   onSubmit,
@@ -62,11 +70,12 @@ export function NotePathDialog({
   }, [isOpen, initialFolder, initialTitle]);
 
   const clean = useMemo(() => sanitizeTitle(title), [title]);
+  const isFolder = kind === "folder";
 
   const relPath = useMemo(() => {
-    const name = `${clean}.md`;
+    const name = isFolder ? clean : `${clean}.md`;
     return folder ? `${folder}/${name}` : name;
-  }, [clean, folder]);
+  }, [clean, folder, isFolder]);
 
   const canSubmit = clean.length > 0;
 
@@ -80,7 +89,7 @@ export function NotePathDialog({
     <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
       <Modal.Container size="lg">
         <Modal.Dialog className="qj-dialog" aria-label={heading}>
-          <div className="border-b border-border/60 px-4 py-3">
+          <div className="border-b border-border/80 px-4 py-3">
             <h2 className="text-sm font-medium">{heading}</h2>
           </div>
 
@@ -96,11 +105,13 @@ export function NotePathDialog({
             </div>
 
             <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-muted">文件名</span>
+              <span className="mb-1.5 block text-xs font-medium text-muted">
+                {isFolder ? "文件夹名" : "文件名"}
+              </span>
               <input
                 autoFocus
                 className="field w-full"
-                aria-label="文件名"
+                aria-label={isFolder ? "文件夹名" : "文件名"}
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 onFocus={(event) => event.currentTarget.select()}
@@ -119,7 +130,7 @@ export function NotePathDialog({
             </p>
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border/60 px-4 py-2.5">
+          <div className="flex justify-end gap-2 border-t border-border/80 px-4 py-2.5">
             <Button variant="ghost" onPress={() => onOpenChange(false)}>
               取消
             </Button>

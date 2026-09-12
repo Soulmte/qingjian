@@ -1,4 +1,5 @@
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
+import type { Node as ProseNode } from "@milkdown/kit/prose/model";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { headingSchema, paragraphSchema } from "@milkdown/kit/preset/commonmark";
 import { $prose, $remark } from "@milkdown/kit/utils";
@@ -12,6 +13,7 @@ import {
   type MarkerNode,
 } from "./align";
 import { alignOfNode } from "./align-selection";
+import { forEachBlockIn, syncDecorations } from "./changed-ranges";
 
 const ALIGN_ATTR = { default: "left", validate: "string" };
 
@@ -122,20 +124,32 @@ export const alignKey = new PluginKey<DecorationSet>("qjAlign");
  * which the view renders on its own, so the class is what the stylesheet turns
  * into a layout. Node decorations on a custom node view's `dom` are already used
  * by focus mode, so this works for Crepe's image block as well.
+ *
+ * Only top-level blocks are looked at: `alignOfNode` answers for paragraphs,
+ * headings and image blocks, and a paragraph nested in a list or a quote is
+ * deliberately not alignable (see `align-selection.ts`), so descending into
+ * children only ever produced decorations that were thrown away.
  */
-export function buildAlignDecorations(state: EditorState): DecorationSet {
+export function alignDecorationsIn(doc: ProseNode, from: number, to: number): Decoration[] {
   const decorations: Decoration[] = [];
 
-  state.doc.descendants((node, pos) => {
+  forEachBlockIn(doc, from, to, (node, pos) => {
     const align = alignOfNode(node);
-    if (!align) return true;
-    decorations.push(
-      Decoration.node(pos, pos + node.nodeSize, { class: alignClass(align) }),
-    );
-    return false;
+    if (align) {
+      decorations.push(
+        Decoration.node(pos, pos + node.nodeSize, { class: alignClass(align) }),
+      );
+    }
   });
 
-  return DecorationSet.create(state.doc, decorations);
+  return decorations;
+}
+
+export function buildAlignDecorations(state: EditorState): DecorationSet {
+  return DecorationSet.create(
+    state.doc,
+    alignDecorationsIn(state.doc, 0, state.doc.content.size),
+  );
 }
 
 export const alignPlugin = $prose(
@@ -144,8 +158,13 @@ export const alignPlugin = $prose(
       key: alignKey,
       state: {
         init: (_config, state) => buildAlignDecorations(state),
+        // Only the blocks the edit fell inside are rebuilt; the rest are carried
+        // across by `map`. Rebuilding the whole document here meant a pass over
+        // every block, and a fresh decoration for each, on every keystroke.
         apply: (tr, value, _oldState, newState) =>
-          tr.docChanged ? buildAlignDecorations(newState) : value,
+          tr.docChanged
+            ? syncDecorations(value, tr, newState.doc, alignDecorationsIn)
+            : value,
       },
       props: {
         decorations: (state) => alignKey.getState(state) ?? null,

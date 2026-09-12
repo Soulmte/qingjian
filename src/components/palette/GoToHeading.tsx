@@ -74,12 +74,12 @@ export function GoToHeading() {
   const setOpen = useUi((state) => state.setGoToOpen);
   const isSourceMode = useUi((state) => state.isSourceMode);
 
-  const content = useWorkspace((state) => state.content);
   const contentLoaded = useWorkspace((state) => state.contentLoaded);
   const activeNoteId = useWorkspace((state) => state.activeNoteId);
 
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [headings, setHeadings] = useState<OutlineItem[]>([]);
   const listRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => {
@@ -92,13 +92,22 @@ export function GoToHeading() {
     setActiveIndex(0);
   }, [query]);
 
-  // Only parsed while the dialog is open: when it is closed there is nothing to
-  // show, and parsing the document on every keystroke to fill a hidden list was
-  // pure waste.
-  const headings = useMemo(
-    () => (isOpen && contentLoaded ? parseOutline(content) : []),
-    [isOpen, content, contentLoaded],
-  );
+  /**
+   * The headings, parsed once when the dialog opens.
+   *
+   * The document is read from the store rather than subscribed to: the dialog is
+   * closed almost all of the time, and subscribing to `content` re-rendered this
+   * component on every character typed into a document whose outline was not even
+   * on screen. A dialog that is open is not being typed into, so one parse at open
+   * time is all it needs.
+   */
+  useEffect(() => {
+    if (!isOpen || !contentLoaded) {
+      setHeadings([]);
+      return;
+    }
+    setHeadings(parseOutline(useWorkspace.getState().content));
+  }, [isOpen, contentLoaded, activeNoteId]);
 
   /** The line the query names, when it names one and there are lines to name. */
   const lineNumber = useMemo(() => {
@@ -149,7 +158,7 @@ export function GoToHeading() {
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setOpen} variant="blur">
       <Modal.Container size="lg" placement="top">
         <Modal.Dialog className="qj-palette" aria-label="跳转">
-          <div className="border-b border-border/60 p-2">
+          <div className="border-b border-border/80 p-2">
             <input
               autoFocus
               className="field w-full"
@@ -225,7 +234,7 @@ export function GoToHeading() {
             )}
           </ul>
 
-          <div className="flex items-center gap-3 border-t border-border/60 px-3 py-1.5 text-[11px] text-muted">
+          <div className="flex items-center gap-3 border-t border-border/80 px-3 py-1.5 text-[11px] text-muted">
             <span>↑↓ 选择</span>
             <span>Enter 跳转</span>
             <span>Esc 关闭</span>

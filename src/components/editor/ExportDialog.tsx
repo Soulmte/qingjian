@@ -91,7 +91,7 @@ export function ExportDialog() {
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setOpen}>
       <Modal.Container size="lg">
         <Modal.Dialog className="qj-dialog" aria-label="导出">
-          <div className="flex items-baseline justify-between gap-3 border-b border-border/60 px-4 py-3">
+          <div className="flex items-baseline justify-between gap-3 border-b border-border/80 px-4 py-3">
             <h2 className="text-sm font-medium">导出</h2>
             <span className="truncate text-xs text-muted">{note?.relPath ?? ""}</span>
           </div>
@@ -131,7 +131,7 @@ export function ExportDialog() {
               })}
             </div>
 
-            <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+            <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-border/80 pt-3">
               <span className="min-w-0">
                 <span className="block text-sm font-medium">写入标题</span>
                 <span className="mt-0.5 block text-xs text-muted">
@@ -146,7 +146,7 @@ export function ExportDialog() {
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-border/60 px-4 py-2.5">
+          <div className="flex items-center justify-end gap-2 border-t border-border/80 px-4 py-2.5">
             <Button variant="ghost" onPress={() => setOpen(false)}>
               取消
             </Button>

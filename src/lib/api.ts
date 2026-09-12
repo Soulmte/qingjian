@@ -30,6 +30,17 @@ export const api = {
     invoke<Workspace>("add_workspace", { rootPath }),
   removeWorkspace: (id: number) => invoke<void>("remove_workspace", { id }),
   syncWorkspace: (id: number) => invoke<Note[]>("sync_workspace", { id }),
+  /** The workspace's subfolders, including empty ones. */
+  listFolders: (id: number) => invoke<string[]>("list_folders", { id }),
+  /** Creates a folder; `relDir` may be nested. Returns the normalised path. */
+  createFolder: (id: number, relDir: string) =>
+    invoke<string>("create_folder", { id, relDir }),
+  /** Renames or moves a folder; every note inside moves with it. */
+  renameFolder: (id: number, relDir: string, newRelDir: string) =>
+    invoke<string>("rename_folder", { id, relDir, newRelDir }),
+  /** Moves a folder and its contents to the recycle bin. */
+  deleteFolder: (id: number, relDir: string) =>
+    invoke<void>("delete_folder", { id, relDir }),
 
   // Notes
   listNotes: (workspaceId: number) =>
@@ -123,6 +134,13 @@ export const api = {
   // Shell
   /** 在系统默认浏览器里打开一个链接（项目主页、发布页）。 */
   openExternal: (url: string) => invoke<void>("open_external", { url }),
+  /**
+   * 在系统文件管理器里定位工作区内的一个路径。
+   *
+   * `relPath` 是相对工作区的路径，空字符串代表根目录；越界检查在 Rust 侧做。
+   */
+  revealInWorkspace: (workspaceId: number, relPath: string) =>
+    invoke<void>("reveal_in_workspace", { workspaceId, relPath }),
 };
 
 /** Turns a thrown command error into something worth showing a user. */

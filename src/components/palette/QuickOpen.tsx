@@ -60,7 +60,7 @@ export function QuickOpen() {
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setQuickOpen} variant="blur">
       <Modal.Container size="lg" placement="top">
         <Modal.Dialog className="qj-palette" aria-label="快速打开">
-          <div className="border-b border-border/60 p-2">
+          <div className="border-b border-border/80 p-2">
             <input
               autoFocus
               className="field w-full"
@@ -122,7 +122,7 @@ export function QuickOpen() {
             )}
           </ul>
 
-          <div className="flex items-center gap-3 border-t border-border/60 px-3 py-1.5 text-[11px] text-muted">
+          <div className="flex items-center gap-3 border-t border-border/80 px-3 py-1.5 text-[11px] text-muted">
             <span>↑↓ 选择</span>
             <span>Enter 打开</span>
             <span>Esc 关闭</span>

@@ -7,10 +7,15 @@
 //! `tauri.conf.json` 的 `plugins.updater`）。官方实现会校验更新包的签名，那是
 //! 自己手写一遍很难做对、也最不该省的一步。
 
-use tauri::AppHandle;
+use std::path::Path;
+
+use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AppError, AppResult};
+use crate::repo;
+use crate::services;
+use crate::state::AppState;
 
 /// 允许在外部浏览器里打开的站点。
 ///
@@ -29,6 +34,36 @@ pub async fn open_external(app: AppHandle, url: String) -> AppResult<()> {
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|error| AppError::Message(format!("无法打开链接：{error}")))
+}
+
+/// 在系统文件管理器里定位工作区内的一个路径（文件或文件夹）。
+///
+/// 路径在 Rust 侧解析并做越界检查，前端只给相对路径——和读写笔记走同一套
+/// 边界规则，界面无权让资源管理器跳到工作区之外。空路径代表工作区根目录。
+#[tauri::command]
+pub async fn reveal_in_workspace(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    workspace_id: i64,
+    rel_path: String,
+) -> AppResult<()> {
+    let workspace = repo::fetch_workspace(&state.pool, workspace_id).await?;
+    let root = Path::new(&workspace.root_path);
+
+    let trimmed = rel_path.trim();
+    let target = if trimmed.is_empty() {
+        root.to_path_buf()
+    } else {
+        services::resolve_within(root, trimmed)?
+    };
+
+    if !target.exists() {
+        return Err(AppError::Message(format!("路径不存在：{}", target.display())));
+    }
+
+    app.opener()
+        .reveal_item_in_dir(&target)
+        .map_err(|error| AppError::Message(format!("无法打开文件管理器：{error}")))
 }
 
 #[cfg(test)]

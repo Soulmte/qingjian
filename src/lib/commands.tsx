@@ -17,14 +17,15 @@ import {
   FileSearch,
   Focus,
   FolderOpen,
+  HardDriveDownload,
   Keyboard,
   ListTree,
   Maximize,
   PanelLeft,
   PencilLine,
   Printer,
-  RefreshCw,
   RotateCcw,
+  RotateCw,
   Save,
   Search,
   Settings,
@@ -95,6 +96,13 @@ export interface AppCommand {
   accel?: Accel;
   /** Shown as a button in the top bar. */
   toolbar?: boolean;
+  /**
+   * Compact label for the top bar button.
+   *
+   * The bar is icon-only on narrow windows, so the text under an icon has to be
+   * short — the full `title` stays on the tooltip and in the palette.
+   */
+  short?: string;
   /** Rendered as a destructive action in the toolbar. */
   danger?: boolean;
   /** The command does nothing while this returns false. */
@@ -351,17 +359,19 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "note.new",
     title: "新建笔记",
+    short: "新建",
     group: "文件",
     icon: <FilePlus2 />,
     shortcut: "Ctrl+N",
     accel: { key: "n", mod: true },
     toolbar: true,
     enabled: () => useWorkspace.getState().activeWorkspaceId !== null,
-    run: () => useUi.getState().setNewNoteOpen(true),
+    run: () => useUi.getState().openNewNote(),
   },
   {
     id: "file.open",
     title: "打开文件…",
+    short: "打开",
     group: "文件",
     icon: <FolderOpen />,
     shortcut: "Ctrl+O",
@@ -372,6 +382,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "quickopen.open",
     title: "快速打开…",
+    short: "快速打开",
     group: "文件",
     icon: <FileSearch />,
     shortcut: "Ctrl+Shift+O",
@@ -382,6 +393,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "note.save",
     title: "保存",
+    short: "保存",
     group: "文件",
     icon: <Save />,
     shortcut: "Ctrl+S",
@@ -393,6 +405,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "note.export",
     title: "导出…",
+    short: "导出",
     group: "文件",
     icon: <FileDown />,
     shortcut: "Ctrl+Shift+S",
@@ -450,6 +463,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "note.delete",
     title: "删除当前笔记",
+    short: "删除",
     group: "文件",
     icon: <Trash2 />,
     toolbar: true,
@@ -479,10 +493,18 @@ export const APP_COMMANDS: AppCommand[] = [
     },
   },
   {
-    id: "note.rescan",
-    title: "重新扫描工作区",
+    id: "workspace.refresh",
+    title: "刷新",
     group: "文件",
-    icon: <RefreshCw />,
+    icon: <RotateCw />,
+    enabled: () => useWorkspace.getState().activeWorkspaceId !== null,
+    run: () => useWorkspace.getState().refreshTree(),
+  },
+  {
+    id: "workspace.reload",
+    title: "从磁盘重新加载",
+    group: "文件",
+    icon: <HardDriveDownload />,
     enabled: () => useWorkspace.getState().activeWorkspaceId !== null,
     run: () => useWorkspace.getState().rescan(),
   },
@@ -501,6 +523,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "find.open",
     title: "查找",
+    short: "查找",
     group: "编辑",
     icon: <Search />,
     shortcut: "Ctrl+F",
@@ -597,6 +620,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "format.alignLeft",
     title: "左对齐",
+    short: "左",
     group: "格式",
     icon: <AlignLeft />,
     // Typora's Ctrl+Shift+L is taken by the sidebar toggle; the shortcuts page
@@ -608,6 +632,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "format.alignCenter",
     title: "居中对齐",
+    short: "中",
     group: "格式",
     icon: <AlignCenter />,
     shortcut: "Ctrl+Shift+E",
@@ -619,6 +644,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "format.alignRight",
     title: "右对齐",
+    short: "右",
     group: "格式",
     icon: <AlignRight />,
     shortcut: "Ctrl+Shift+R",
@@ -631,6 +657,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "sidebar.toggle",
     title: "切换侧边栏",
+    short: "侧栏",
     group: "视图",
     icon: <PanelLeft />,
     shortcut: "Ctrl+Shift+L",
@@ -651,6 +678,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "outline.toggle",
     title: "大纲面板",
+    short: "大纲",
     group: "视图",
     icon: <ListTree />,
     shortcut: "Ctrl+Shift+1",
@@ -664,6 +692,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "source.toggle",
     title: "源代码模式",
+    short: "源码",
     group: "视图",
     icon: <Code2 />,
     shortcut: "Ctrl+/",
@@ -674,6 +703,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "focus.toggle",
     title: "专注模式",
+    short: "专注",
     group: "视图",
     icon: <Focus />,
     shortcut: "F8",
@@ -687,6 +717,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "typewriter.toggle",
     title: "打字机模式",
+    short: "打字机",
     group: "视图",
     icon: <Type />,
     shortcut: "F9",
@@ -743,6 +774,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "theme.toggle",
     title: "切换明暗主题",
+    short: "主题",
     group: "外观",
     icon: <SunMoon />,
     shortcut: "Ctrl+Alt+N",
@@ -757,6 +789,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "palette.open",
     title: "命令面板",
+    short: "命令",
     group: "应用",
     icon: <Command />,
     shortcut: "Ctrl+Shift+P",
@@ -767,6 +800,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "settings.open",
     title: "设置",
+    short: "设置",
     group: "应用",
     icon: <Settings />,
     shortcut: "Ctrl+,",

@@ -40,17 +40,26 @@ interface OpenMenu {
   x: number;
   y: number;
   entries: ContextMenuEntry[];
+  /**
+   * The element the menu was opened from, when it was opened by a left click
+   * rather than by right-clicking a surface.
+   *
+   * Two things depend on it: clicking that element does not dismiss the menu
+   * (otherwise a dropdown could not be toggled shut by its own trigger), and the
+   * trigger can compare it to itself to know whether the open menu is its own.
+   */
+  anchor?: Element | null;
 }
 
 interface ContextMenuState {
   menu: OpenMenu | null;
-  openAt: (x: number, y: number, entries: ContextMenuEntry[]) => void;
+  openAt: (x: number, y: number, entries: ContextMenuEntry[], anchor?: Element | null) => void;
   close: () => void;
 }
 
 export const useContextMenu = create<ContextMenuState>((set) => ({
   menu: null,
-  openAt: (x, y, entries) => set({ menu: { x, y, entries } }),
+  openAt: (x, y, entries, anchor = null) => set({ menu: { x, y, entries, anchor } }),
   close: () => set((state) => (state.menu === null ? state : { menu: null })),
 }));
 

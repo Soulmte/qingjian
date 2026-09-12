@@ -1,7 +1,7 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { parseOutline } from "@/lib/markdown";
+import { parseOutline, type OutlineItem } from "@/lib/markdown";
 import { useWorkspace } from "@/stores/workspace";
 
 const HEADING_SELECTOR = ".milkdown .ProseMirror :is(h1,h2,h3,h4,h5,h6)";
@@ -15,19 +15,58 @@ function renderedHeadings(): HTMLElement[] {
   return Array.from(scroller.querySelectorAll<HTMLElement>(HEADING_SELECTOR));
 }
 
+/** How long after the last keystroke the outline is rebuilt. */
+const OUTLINE_DELAY = 250;
+
+/**
+ * The headings of the open note, rebuilt a beat after typing stops.
+ *
+ * Parsing walks the whole document. `useDeferredValue` used to keep that off the
+ * critical path, but the panel still subscribed to `content`, so every character
+ * typed re-rendered it — and on a long note the deferred pass then ran often
+ * enough to be felt anyway. Reading the text from the store on a timer instead
+ * means a keystroke costs the outline nothing at all.
+ */
+function useOutlineItems(loaded: boolean, noteId: number | null) {
+  const [items, setItems] = useState<OutlineItem[]>([]);
+
+  useEffect(() => {
+    if (!loaded) {
+      setItems([]);
+      return;
+    }
+
+    let timer: number | null = null;
+
+    const schedule = (delay: number) => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        setItems(parseOutline(useWorkspace.getState().content));
+      }, delay);
+    };
+
+    // Opening a note should show its outline at once, not a beat later.
+    schedule(0);
+
+    const unsubscribe = useWorkspace.subscribe((state, previous) => {
+      if (state.content !== previous.content) schedule(OUTLINE_DELAY);
+    });
+
+    return () => {
+      unsubscribe();
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [loaded, noteId]);
+
+  return items;
+}
+
 export function Outline() {
-  const content = useWorkspace((state) => state.content);
   const contentLoaded = useWorkspace((state) => state.contentLoaded);
   const activeNoteId = useWorkspace((state) => state.activeNoteId);
 
-  // Rebuilding the outline walks the whole document, so it is handed the deferred
-  // text: while the user is typing the editor keeps priority and the outline
-  // catches up once there is a pause, instead of parsing on every keystroke.
-  const deferredContent = useDeferredValue(content);
-  const items = useMemo(
-    () => (contentLoaded ? parseOutline(deferredContent) : []),
-    [deferredContent, contentLoaded],
-  );
+  const items = useOutlineItems(contentLoaded, activeNoteId);
 
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -86,7 +125,7 @@ export function Outline() {
               style={{
                 paddingLeft: (item.level - 1) * 12 + 8,
                 ...(isActive
-                  ? { background: "var(--qj-accent-light)", color: "var(--qj-accent)" }
+                  ? { background: "var(--qj-accent-light)", color: "var(--qj-accent-strong)" }
                   : null),
               }}
               onClick={() => jumpTo(index)}

@@ -158,7 +158,7 @@ export function FolderPicker({
 
         <button
           type="button"
-          className="mt-1 flex w-full items-center gap-2 rounded-md border-t border-border/60 px-2.5 py-2 text-left text-sm text-muted transition-colors hover:bg-default/60 hover:text-foreground"
+          className="mt-1 flex w-full items-center gap-2 rounded-md border-t border-border/80 px-2.5 py-2 text-left text-sm text-muted transition-colors hover:bg-default/60 hover:text-foreground"
           onClick={() => {
             setIsOpen(false);
             setIsTyping(true);

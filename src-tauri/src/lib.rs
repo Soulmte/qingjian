@@ -76,6 +76,10 @@ pub fn run() {
             commands::workspace::add_workspace,
             commands::workspace::remove_workspace,
             commands::workspace::sync_workspace,
+            commands::workspace::list_folders,
+            commands::workspace::create_folder,
+            commands::workspace::rename_folder,
+            commands::workspace::delete_folder,
             commands::note::list_notes,
             commands::note::read_note,
             commands::note::save_note,
@@ -97,6 +101,7 @@ pub fn run() {
             commands::fonts::list_system_fonts,
             commands::bootstrap::bootstrap_workspace,
             commands::shell::open_external,
+            commands::shell::reveal_in_workspace,
             state::take_startup_notice,
             state::take_open_file,
         ])

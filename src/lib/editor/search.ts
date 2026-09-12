@@ -1,13 +1,22 @@
 import type { Node as ProseNode } from "@milkdown/kit/prose/model";
-import { Plugin, PluginKey, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
+import {
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type Transaction,
+} from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
+import { changedRanges } from "./changed-ranges";
 import {
   centredScrollTop,
   findInSegments,
+  indexAtOrAfter,
   isComfortablyVisible,
+  mergeMatches,
+  withinAny,
   wrapIndex,
   type SearchMatch,
   type TextSegment,
@@ -19,6 +28,15 @@ export interface SearchState {
   /** Index into `matches`. */
   index: number;
   matches: SearchMatch[];
+  /**
+   * The highlights for `matches`, kept alongside them.
+   *
+   * `props.decorations` is consulted on every view update, including ones that
+   * changed neither the query nor the document, so building the set there meant
+   * a `Decoration` per match and a re-sort of all of them on every redraw. It is
+   * built once per state change instead.
+   */
+  decorations: DecorationSet;
 }
 
 type SearchMeta =
@@ -28,21 +46,42 @@ type SearchMeta =
 
 export const searchKey = new PluginKey<SearchState>("qjSearch");
 
-const IDLE: SearchState = { query: "", caseSensitive: false, index: 0, matches: [] };
+/** The state before anything is being searched for. */
+export const IDLE: SearchState = {
+  query: "",
+  caseSensitive: false,
+  index: 0,
+  matches: [],
+  decorations: DecorationSet.empty,
+};
 
 /** Every text node, paired with the document position it starts at. */
 export function collectSegments(doc: ProseNode): TextSegment[] {
+  return segmentsIn(doc, 0, doc.content.size);
+}
+
+/**
+ * The text nodes overlapping `[from, to]`.
+ *
+ * `nodesBetween` visits only the subtree the range touches, so re-scanning after
+ * an edit costs what the edit did rather than what the document holds. A node
+ * that straddles the boundary is reported whole: match ranges are document
+ * positions, and half a node would produce offsets that do not line up.
+ */
+function segmentsIn(doc: ProseNode, from: number, to: number): TextSegment[] {
   const segments: TextSegment[] = [];
-  doc.descendants((node, pos) => {
+  doc.nodesBetween(from, to, (node, pos) => {
     if (node.isText && node.text) segments.push({ text: node.text, start: pos });
     return true;
   });
   return segments;
 }
 
-function buildDecorations(state: EditorState): DecorationSet {
-  const search = searchKey.getState(state);
-  if (!search || search.matches.length === 0) return DecorationSet.empty;
+/** The matches and index a search is showing, before its highlights are built. */
+type SearchMatchState = Omit<SearchState, "decorations">;
+
+function buildDecorations(doc: ProseNode, search: SearchMatchState): DecorationSet {
+  if (search.matches.length === 0) return DecorationSet.empty;
 
   const decorations = search.matches.map((match, index) =>
     Decoration.inline(match.from, match.to, {
@@ -50,7 +89,108 @@ function buildDecorations(state: EditorState): DecorationSet {
     }),
   );
 
-  return DecorationSet.create(state.doc, decorations);
+  return DecorationSet.create(doc, decorations);
+}
+
+/**
+ * The matches a document edit invalidated, re-found.
+ *
+ * Match ranges are document positions, so an edit anywhere above a match shifts
+ * it — but `tr.mapping` already knows by how much. Only the spans the edit
+ * touched have to be searched again, widened by the query length so an
+ * occurrence formed across the edit's boundary is still found. Everything else
+ * is carried across untouched, which is what keeps typing with the find bar open
+ * off the whole-document path.
+ */
+function remapMatches(previous: SearchMatchState, tr: Transaction): SearchMatch[] {
+  const { query, caseSensitive } = previous;
+  if (query.length === 0) return [];
+
+  const spans: SearchMatch[] = [];
+  const found: SearchMatch[] = [];
+  const limit = tr.doc.content.size;
+
+  for (const range of changedRanges(tr)) {
+    // A match cannot straddle two text nodes, so the widening only has to cover
+    // the query itself: any occurrence overlapping the edit starts within
+    // `query.length - 1` of it.
+    const from = Math.max(0, range.from - query.length);
+    const to = Math.min(limit, range.to + query.length);
+    spans.push({ from, to });
+    found.push(...findInSegments(segmentsIn(tr.doc, from, to), query, caseSensitive));
+  }
+
+  const kept: SearchMatch[] = [];
+  for (const match of previous.matches) {
+    const from = tr.mapping.map(match.from, -1);
+    const to = tr.mapping.map(match.to, 1);
+    // A match the edit ran through is no longer the same text; the re-scan of
+    // that span is what reports whatever is there now.
+    if (to - from !== match.to - match.from) continue;
+    const moved = { from, to };
+    if (!withinAny(moved, spans)) kept.push(moved);
+  }
+
+  return mergeMatches(kept, found);
+}
+
+/** A state with its highlights built, so `props.decorations` only reads them. */
+function withDecorations(doc: ProseNode, state: SearchMatchState): SearchState {
+  return { ...state, decorations: buildDecorations(doc, state) };
+}
+
+/**
+ * The plugin's whole state transition, as a plain function.
+ *
+ * Kept out of the `Plugin` so it can be exercised against a bare ProseMirror
+ * schema: `$prose` hands its plugin to Milkdown's container rather than
+ * returning it, so there is otherwise no way to drive this without a webview —
+ * and the incremental re-mapping below is the part that most needs the coverage.
+ */
+export function nextSearchState(
+  value: SearchState,
+  tr: Transaction,
+): SearchState {
+  const meta = tr.getMeta(searchKey) as SearchMeta | undefined;
+
+  if (meta?.type === "reset") return IDLE;
+
+  if (meta?.type === "set") {
+    const matches =
+      meta.query.length === 0
+        ? []
+        : findInSegments(collectSegments(tr.doc), meta.query, meta.caseSensitive);
+    return withDecorations(tr.doc, {
+      query: meta.query,
+      caseSensitive: meta.caseSensitive,
+      matches,
+      index: wrapIndex(0, matches.length),
+    });
+  }
+
+  if (meta?.type === "step") {
+    return withDecorations(tr.doc, {
+      ...value,
+      index: wrapIndex(value.index + meta.delta, value.matches.length),
+    });
+  }
+
+  if (!tr.docChanged) return value;
+  // Nothing is being searched for, so there is nothing to carry across.
+  if (value.query.length === 0) return value;
+
+  // The document moved under us. The current match is followed to where it ended
+  // up, so an edit elsewhere does not send the find bar back to the first hit.
+  const anchor = value.matches[value.index];
+  const matches = remapMatches(value, tr);
+  const index =
+    anchor === undefined ? 0 : indexAtOrAfter(matches, tr.mapping.map(anchor.from, -1));
+
+  return withDecorations(tr.doc, {
+    ...value,
+    matches,
+    index: wrapIndex(index, matches.length),
+  });
 }
 
 export const searchPlugin = $prose(
@@ -59,31 +199,10 @@ export const searchPlugin = $prose(
       key: searchKey,
       state: {
         init: () => IDLE,
-        apply: (tr, value) => {
-          const meta = tr.getMeta(searchKey) as SearchMeta | undefined;
-          let next = value;
-
-          if (meta?.type === "set") {
-            next = { ...value, query: meta.query, caseSensitive: meta.caseSensitive, index: 0 };
-          } else if (meta?.type === "step") {
-            next = { ...value, index: value.index + meta.delta };
-          } else if (meta?.type === "reset") {
-            next = IDLE;
-          }
-
-          // Recompute when the query changed or the document moved under us.
-          if (meta?.type === "set" || meta?.type === "reset" || tr.docChanged) {
-            next = {
-              ...next,
-              matches: findInSegments(collectSegments(tr.doc), next.query, next.caseSensitive),
-            };
-          }
-
-          return { ...next, index: wrapIndex(next.index, next.matches.length) };
-        },
+        apply: (tr, value) => nextSearchState(value, tr),
       },
       props: {
-        decorations: (state) => buildDecorations(state),
+        decorations: (state) => searchKey.getState(state)?.decorations ?? null,
       },
     }),
 );

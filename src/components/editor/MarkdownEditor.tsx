@@ -30,7 +30,9 @@ import { focusModePlugin } from "@/lib/editor/focus-mode";
 import { parseFrontMatter, withFrontMatter } from "@/lib/front-matter";
 import { EDITOR_PLACEHOLDER, editorLabels } from "@/lib/editor/locale";
 import { searchPlugin } from "@/lib/editor/search";
+import { skipRenderPlugin } from "@/lib/editor/skip-render";
 import { resolveImageSrc, storeImage } from "@/lib/images";
+import { isLargeDocument } from "@/lib/large-document";
 import { centerCaret } from "@/lib/editor/typewriter";
 import { typoraKeymap } from "@/lib/typora-keymap";
 import { useContextMenu } from "@/lib/context-menu";
@@ -155,6 +157,11 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
       .use(alignedHeadingSchema)
       .use(remarkBlockAlignPlugin)
       .use(searchPlugin);
+
+    // Only long notes get it: containment makes each block lay out on its own
+    // and the scrollbar ride on estimates until a block has been seen, neither
+    // of which is worth paying for on a note that renders instantly anyway.
+    if (isLargeDocument(initialContent)) crepe.editor.use(skipRenderPlugin);
 
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {

@@ -169,6 +169,28 @@ pub fn delete_file(path: &Path) -> AppResult<()> {
     Ok(())
 }
 
+/// The directory counterpart of [`delete_file`].
+///
+/// The shell's delete works on a directory too (and is what puts the whole tree
+/// in the recycle bin with its path recorded). The fallback differs, though: a
+/// plain `remove_file` cannot remove a directory, so the un-recyclable case — a
+/// network share, a removable drive — removes the tree outright.
+pub fn delete_directory(path: &Path) -> AppResult<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    #[cfg(windows)]
+    if let Err(error) = shell_delete(path) {
+        eprintln!("无法移入回收站，将直接删除：{error}");
+    } else {
+        return Ok(());
+    }
+
+    std::fs::remove_dir_all(path)?;
+    Ok(())
+}
+
 /// The shell's delete, which is the only way to reach the recycle bin.
 #[cfg(windows)]
 fn shell_delete(path: &Path) -> Result<(), String> {
@@ -323,6 +345,67 @@ fn collect(root: &Path, dir: &Path, depth: usize, out: &mut Vec<String>) -> AppR
                 out.push(to_slash_path(relative));
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Lists every subdirectory under `root` as a forward-slash relative path.
+///
+/// The sidebar tree is built from notes, so a folder the user just created would
+/// be invisible until something was put inside it. Returning the directories too
+/// is what lets an empty folder show up, and what makes a folder's own context
+/// menu reachable.
+///
+/// Pruning matches [`scan_markdown`]: hidden entries and generated folders are
+/// skipped, so the tree does not grow `node_modules` back into existence.
+pub fn scan_directories(root: &Path) -> AppResult<Vec<String>> {
+    if !root.is_dir() {
+        return Err(AppError::Message(format!(
+            "工作区目录不存在：{}",
+            root.display()
+        )));
+    }
+
+    let mut dirs = Vec::new();
+    collect_directories(root, root, 0, &mut dirs)?;
+    dirs.sort();
+    Ok(dirs)
+}
+
+fn collect_directories(
+    root: &Path,
+    dir: &Path,
+    depth: usize,
+    out: &mut Vec<String>,
+) -> AppResult<()> {
+    if depth > MAX_SCAN_DEPTH {
+        return Ok(());
+    }
+
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with('.') || is_skipped_dir(&name) {
+            continue;
+        }
+
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if !file_type.is_dir() {
+            continue;
+        }
+
+        let path = entry.path();
+        if let Ok(relative) = path.strip_prefix(root) {
+            out.push(to_slash_path(relative));
+        }
+        collect_directories(root, &path, depth + 1, out)?;
     }
 
     Ok(())
@@ -656,6 +739,31 @@ mod tests {
 
         let files = scan_markdown(&root).expect("scan");
         assert_eq!(files, vec!["docs/guide.md".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn scan_directories_lists_folders_and_skips_generated_ones() {
+        let root = std::env::temp_dir().join(format!("qingjian-dirs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+
+        std::fs::create_dir_all(root.join("docs/guide")).unwrap();
+        std::fs::write(root.join("docs/guide/a.md"), "# x\n").unwrap();
+        // An empty folder has to show up too — that is the whole point.
+        std::fs::create_dir_all(root.join("empty")).unwrap();
+        std::fs::create_dir_all(root.join("node_modules/pkg")).unwrap();
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+
+        let dirs = scan_directories(&root).expect("scan");
+        assert_eq!(
+            dirs,
+            vec![
+                "docs".to_string(),
+                "docs/guide".to_string(),
+                "empty".to_string()
+            ]
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

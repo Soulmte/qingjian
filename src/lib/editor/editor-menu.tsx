@@ -14,6 +14,33 @@ import {
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
 import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  BoxSelect,
+  ClipboardCopy,
+  Code,
+  Copy,
+  Eraser,
+  FileText,
+  Image,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  Minus,
+  Pilcrow,
+  Quote,
+  Redo2,
+  Scissors,
+  SquareCode,
+  SquarePlus,
+  Strikethrough,
+  Table,
+  Undo2,
+} from "lucide-react";
 
 import { commandMenuItem, presentCommands } from "@/lib/commands";
 import {
@@ -38,6 +65,13 @@ import { useWorkspace } from "@/stores/workspace";
 export interface EditorMenuHost extends EditableHost {
   focus: () => void;
 }
+
+/** The icon each alignment shows, in the segmented row inside the 对齐 submenu. */
+const ALIGN_ICON = {
+  left: <AlignLeft />,
+  center: <AlignCenter />,
+  right: <AlignRight />,
+} as const;
 
 /**
  * The editor's right-click menu.
@@ -68,6 +102,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
   const undoItem: ContextMenuItem = {
     id: "edit.undo",
     label: "撤销",
+    icon: <Undo2 />,
     chord: "Ctrl+Z",
     disabled: !undo(state),
     run: () => {
@@ -79,6 +114,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
   const redoItem: ContextMenuItem = {
     id: "edit.redo",
     label: "重做",
+    icon: <Redo2 />,
     chord: "Ctrl+Y",
     disabled: !redo(state),
     run: () => {
@@ -90,6 +126,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
   const cutItem: ContextMenuItem = {
     id: "edit.cut",
     label: "剪切",
+    icon: <Scissors />,
     chord: "Ctrl+X",
     disabled: state.selection.empty,
     run: () => {
@@ -101,6 +138,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
   const copyItem: ContextMenuItem = {
     id: "edit.copy",
     label: "复制",
+    icon: <Copy />,
     chord: "Ctrl+C",
     disabled: state.selection.empty,
     run: () => {
@@ -112,6 +150,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
   const selectAllItem: ContextMenuItem = {
     id: "edit.selectAll",
     label: "全选",
+    icon: <BoxSelect />,
     chord: "Ctrl+A",
     run: () => {
       selectAll(view.state, view.dispatch);
@@ -129,34 +168,40 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
     {
       id: "menu.format",
       label: "格式",
+      icon: <Bold />,
       submenu: [
         {
           id: "format.bold",
           label: "加粗",
+          icon: <Bold />,
           chord: "Ctrl+B",
           run: () => runEditorCommand(toggleStrongCommand.key),
         },
         {
           id: "format.italic",
           label: "斜体",
+          icon: <Italic />,
           chord: "Ctrl+I",
           run: () => runEditorCommand(toggleEmphasisCommand.key),
         },
         {
           id: "format.strike",
           label: "删除线",
+          icon: <Strikethrough />,
           chord: "Alt+Shift+5",
           run: () => runEditorCommand(toggleStrikethroughCommand.key),
         },
         {
           id: "format.inlineCode",
           label: "行内代码",
+          icon: <Code />,
           chord: "Ctrl+Shift+`",
           run: () => runEditorCommand(toggleInlineCodeCommand.key),
         },
         {
           id: "format.clear",
           label: "清除格式",
+          icon: <Eraser />,
           chord: "Ctrl+\\",
           run: () => clearFormatting(view),
         },
@@ -166,6 +211,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
     {
       id: "menu.paragraph",
       label: "段落",
+      icon: <Pilcrow />,
       submenu: [
         {
           row: [
@@ -191,18 +237,21 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
         {
           id: "para.quote",
           label: "引用",
+          icon: <Quote />,
           chord: "Ctrl+Shift+Q",
           run: () => runEditorCommand(wrapInBlockquoteCommand.key),
         },
         {
           id: "para.bullet",
           label: "无序列表",
+          icon: <List />,
           chord: "Ctrl+Shift+]",
           run: () => runEditorCommand(wrapInBulletListCommand.key),
         },
         {
           id: "para.ordered",
           label: "有序列表",
+          icon: <ListOrdered />,
           chord: "Ctrl+Shift+[",
           run: () => runEditorCommand(wrapInOrderedListCommand.key),
         },
@@ -213,11 +262,13 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
     {
       id: "menu.align",
       label: "对齐",
+      icon: <AlignLeft />,
       submenu: [
         {
           row: (["left", "center", "right"] as const).map((align) => ({
             id: `align.${align}`,
             label: align === "left" ? "左对齐" : align === "center" ? "居中" : "右对齐",
+            icon: ALIGN_ICON[align],
             chord:
               align === "center" ? "Ctrl+Shift+E" : align === "right" ? "Ctrl+Shift+R" : undefined,
             selected: target?.align === align,
@@ -235,10 +286,12 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
     {
       id: "menu.insert",
       label: "插入",
+      icon: <SquarePlus />,
       submenu: [
         {
           id: "insert.link",
           label: "链接",
+          icon: <Link />,
           chord: "Ctrl+K",
           run: () => runEditorCommand(toggleLinkCommand.key),
         },
@@ -246,12 +299,14 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
         {
           id: "insert.table",
           label: "表格",
+          icon: <Table />,
           chord: "Ctrl+T",
           run: () => runEditorCommand(insertTableCommand.key),
         },
         {
           id: "insert.code",
           label: "代码块",
+          icon: <SquareCode />,
           chord: "Ctrl+Shift+K",
           run: () => runEditorCommand(createCodeBlockCommand.key),
         },
@@ -259,6 +314,7 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
         {
           id: "insert.hr",
           label: "分割线",
+          icon: <Minus />,
           run: () => runEditorCommand(insertHrCommand.key),
         },
       ],
@@ -270,15 +326,18 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
     entries.push({
       id: "menu.image",
       label: "图片",
+      icon: <Image />,
       submenu: [
         {
           id: "image.copySrc",
           label: "复制图片地址",
+          icon: <Link />,
           run: () => copyText(reference),
         },
         {
           id: "image.copyMarkdown",
           label: "复制 Markdown 引用",
+          icon: <ClipboardCopy />,
           run: () => copyText(`![](${reference})`),
         },
       ],
@@ -290,7 +349,12 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
     .notes.find((item) => item.id === useWorkspace.getState().activeNoteId);
 
   if (note) {
-    entries.push({ id: "menu.note", label: "笔记", submenu: buildNoteMenu(note) });
+    entries.push({
+      id: "menu.note",
+      label: "笔记",
+      icon: <FileText />,
+      submenu: buildNoteMenu(note),
+    });
   }
 
   return entries;

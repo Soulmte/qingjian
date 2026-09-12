@@ -51,7 +51,16 @@ export interface SearchHit {
 export type ThemeMode = "light" | "dark" | "system";
 
 /** 强调色，对应 `theme.css` 里的 `[data-qj-accent]` */
-export type AccentName = "bamboo" | "ink" | "rouge" | "ochre" | "violet" | "teal";
+export type AccentName =
+  | "bamboo"
+  | "ink"
+  | "rouge"
+  | "ochre"
+  | "violet"
+  | "teal"
+  | "mono"
+  | "gamboge"
+  | "idea";
 
 /** 代码块背景，对应 `[data-qj-codebg]`。cloud/sand/celadon 为亮色，其余为暗色。 */
 export type CodeBackgroundName =

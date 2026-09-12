@@ -92,24 +92,38 @@ function contrast(aHex: string, bHex: string): number {
 
 const ACCENTS_PALETTE = {
   /** 竹青 */
-  bamboo: { light: "#4a7c59", dark: "#7ba885", textLight: "#ffffff", textDark: "#101711" },
+  bamboo: { light: "#017b40", dark: "#53cd80", textLight: "#ffffff", textDark: "#0e0d0b" },
   /** 墨蓝 */
-  ink: { light: "#3b5b8c", dark: "#7d9cc9", textLight: "#ffffff", textDark: "#0f131a" },
+  ink: { light: "#2e69c4", dark: "#81b2ff", textLight: "#ffffff", textDark: "#0e0d0b" },
   /** 胭脂 */
-  rouge: { light: "#a3536b", dark: "#c08798", textLight: "#ffffff", textDark: "#1a0d11" },
+  rouge: { light: "#ad3c6f", dark: "#fc84b4", textLight: "#ffffff", textDark: "#0e0d0b" },
   /** 赭石 */
-  ochre: { light: "#9c5b34", dark: "#c99a72", textLight: "#ffffff", textDark: "#1a1109" },
+  ochre: { light: "#a35301", dark: "#fb9344", textLight: "#ffffff", textDark: "#0e0d0b" },
   /** 黛紫 */
-  violet: { light: "#6a5b93", dark: "#a99ccc", textLight: "#ffffff", textDark: "#150f1e" },
+  violet: { light: "#7454ba", dark: "#b89eff", textLight: "#ffffff", textDark: "#0e0d0b" },
   /** 苍碧 */
-  teal: { light: "#3f7d7a", dark: "#7fb8b3", textLight: "#ffffff", textDark: "#0c1717" },
+  teal: { light: "#047773", dark: "#02cbc3", textLight: "#ffffff", textDark: "#0e0d0b" },
+  /** 墨白 */
+  mono: { light: "#2f2d2c", dark: "#d7d4d1", textLight: "#ffffff", textDark: "#0e0d0b" },
+  /** 藤黄 */
+  gamboge: { light: "#8d6d01", dark: "#daaa02", textLight: "#ffffff", textDark: "#0e0d0b" },
+  /** IDEA 蓝 */
+  idea: { light: "#2669ed", dark: "#4785ff", textLight: "#ffffff", textDark: "#0e0d0b" },
 } as const;
 
 type Mode = "light" | "dark";
 
 interface ModeConfig {
   base: { bg: string; paper: string; text: string };
-  tint: { bg: number; paper: number; text: number };
+  tint: {
+    bg: number;
+    paper: number;
+    text: number;
+    /** Accent share of the selected-row surface (`--qj-accent-light`). */
+    soft: number;
+    /** Accent share of the text drawn on it (`--qj-accent-strong`). */
+    strong: number;
+  };
   elevated: { anchor: string; amount: number };
   menuIcon: { anchor: string; amount: number };
   menuBorder: { anchor: string; amount: number };
@@ -122,19 +136,19 @@ interface ModeConfig {
 
 const MODES: Record<Mode, ModeConfig> = {
   light: {
-    base: { bg: "#f6f5f1", paper: "#ffffff", text: "#2d2a26" },
-    tint: { bg: 8, paper: 5, text: 5 },
-    elevated: { anchor: "#ffffff", amount: 3 },
-    menuIcon: { anchor: "#57534b", amount: 18 },
-    menuBorder: { anchor: "#d5d0c5", amount: 16 },
+    base: { bg: "#f3efec", paper: "#fcfaf7", text: "#252220" },
+    tint: { bg: 2, paper: 1.5, text: 2.5, soft: 7, strong: 74 },
+    elevated: { anchor: "#fefefd", amount: 1.5 },
+    menuIcon: { anchor: "#5c5750", amount: 8 },
+    menuBorder: { anchor: "#d1cbc4", amount: 6 },
     separation: "border",
   },
   dark: {
-    base: { bg: "#1d1c1a", paper: "#252421", text: "#d9d5cc" },
-    tint: { bg: 14, paper: 8, text: 5 },
-    elevated: { anchor: "#322f2a", amount: 12 },
-    menuIcon: { anchor: "#c4beb1", amount: 18 },
-    menuBorder: { anchor: "#524e46", amount: 16 },
+    base: { bg: "#181613", paper: "#21201e", text: "#eae7e3" },
+    tint: { bg: 3, paper: 2, text: 3, soft: 14, strong: 78 },
+    elevated: { anchor: "#2b2a28", amount: 5 },
+    menuIcon: { anchor: "#b9b3a9", amount: 8 },
+    menuBorder: { anchor: "#4c4741", amount: 8 },
     separation: "surface",
   },
 };
@@ -169,6 +183,21 @@ describe.each(Object.entries(MODES))("popup contrast / %s", (mode, config) => {
     // Buttons and selected rows paint the accent-foreground on the accent fill.
     it("the accent foreground is legible on the accent fill", () => {
       expect(contrast(accentText, colour)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // The selected row is the accent used as *text* on a tint of itself. Holding
+    // the accent light enough to read there would rule out reference colours like
+    // macOS blue, so the text comes from `--qj-accent-strong` instead, and this is
+    // what keeps that derivation honest.
+    it("the selected row reads: accent-strong on accent-light", () => {
+      const soft = mixOklab(colour, config.tint.soft, config.base.paper);
+      const strong = mixOklab(colour, config.tint.strong, config.base.text);
+      expect(contrast(strong, soft)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    // Links and other accent-coloured text sit on the paper itself.
+    it("the accent is legible as text on the paper", () => {
+      expect(contrast(colour, paper)).toBeGreaterThanOrEqual(4.5);
     });
 
     it("menu text is legible on the popup surface", () => {

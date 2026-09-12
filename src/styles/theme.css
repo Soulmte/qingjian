@@ -7,9 +7,9 @@
 :root {
   /* 强调色兜底：设置加载完成前 `data-qj-accent` 还不存在，而下面的纸色是由
      强调色混合派生的，所以这里必须先给出一个可解析的值。 */
-  --qj-accent: #4a7c59;
-  --qj-accent-hover: #3f6b4c;
-  --qj-accent-light: #e8f0ea;
+  --qj-accent: #017b40;
+  --qj-accent-hover: #026c37;
+  --qj-accent-light: #eaefe7;
   --qj-accent-text: #ffffff;
 
   /* 字体 */
@@ -24,33 +24,36 @@
 }
 
 /* ---------- 基底与着色强度 ----------
-   用户给定的纸色作为「中性基底」原样保留，着色强度单独抽成 `--qj-tint-*`。
-   强调色只通过 color-mix 注入基底，因此换主题时改变的不是某个按钮，而是
-   整块画布的色相。想整体调浓淡，改这一组变量即可。
+   中性基底是暖纸色，着色强度单独抽成 `--qj-tint-*`。强调色通过 color-mix
+   注入基底，所以换主题时整块画布的色相跟着走，而不是只换某一个按钮。
 
-   分级刻意不对称：侧栏、工具栏、分割线这些“边框区域”着色较重，承担主题
-   的辨识度；书写纸面只轻带上一点，保证长时间阅读不刺眼。 */
+   比例刻意压得很低（大面积 1.5~5%，边框最多 8%）。两个原因：一是暖底混冷强调
+   色，比例一高就得到「既不够浓、又已经发脏」的中间色，这正是旧版暗色看着像灰
+   的原因；二是六个强调色的亮度已经统一，主题的辨识度由强调色自己在交互态上
+   承担，画布不需要再被染色。
+
+   注意这一组不能反过来用：加大比例并不会让主题更「有颜色」，只会更脏。 */
 
 html.light,
 html[data-theme="light"] {
-  --qj-base-bg: #f6f5f1;
-  --qj-base-bg-sidebar: #efece6;
-  --qj-base-bg-paper: #ffffff;
-  --qj-base-bg-toolbar: #fbfaf7;
-  --qj-base-text: #2d2a26;
-  --qj-base-text-light: #8b857a;
-  --qj-base-border: #e4e0d8;
-  --qj-base-border-strong: #d5d0c5;
+  --qj-base-bg: #f3efec;
+  --qj-base-bg-sidebar: #efeae5;
+  --qj-base-bg-paper: #fcfaf7;
+  --qj-base-bg-toolbar: #f7f4f1;
+  --qj-base-text: #252220;
+  --qj-base-text-light: #746f6a;
+  --qj-base-border: #e3dfda;
+  --qj-base-border-strong: #d1cbc4;
 
-  --qj-tint-bg: 8%;
-  --qj-tint-bg-sidebar: 18%;
-  --qj-tint-bg-paper: 5%;
-  --qj-tint-bg-toolbar: 12%;
-  --qj-tint-text: 5%;
-  --qj-tint-text-light: 13%;
-  --qj-tint-border: 16%;
-  --qj-tint-border-strong: 26%;
-  --qj-bg-hover: color-mix(in oklab, var(--qj-accent) 10%, transparent);
+  --qj-tint-bg: 2%;
+  --qj-tint-bg-sidebar: 5%;
+  --qj-tint-bg-paper: 1.5%;
+  --qj-tint-bg-toolbar: 3.5%;
+  --qj-tint-text: 2.5%;
+  --qj-tint-text-light: 4%;
+  --qj-tint-border: 5%;
+  --qj-tint-border-strong: 7%;
+  --qj-bg-hover: color-mix(in oklab, var(--qj-accent) 7%, transparent);
 
   --qj-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
   --qj-overlay: rgba(45, 42, 38, 0.32);
@@ -62,28 +65,31 @@ html[data-theme="light"] {
 }
 
 /* ---------- 暗色基底 ----------
-   深底需要更高的占比才能在切换时看出来，因此暗色的着色整体偏重。 */
+   暗色基底比亮色压得更深：强调色比基底亮，混进去会把底色整体抬起来，所以基底
+   必须先落下去，混完才在该在的位置。这几组值对应的实际底色是
+   #12120d（侧栏）→ #131511（工具栏）→ #1a1b16（画布）→ #222320（纸面），
+   对照 IDEA New UI 的 editor 0.239 / panel 0.296 亮度阶梯。 */
 
 html.dark,
 html[data-theme="dark"] {
-  --qj-base-bg: #1d1c1a;
-  --qj-base-bg-sidebar: #161513;
-  --qj-base-bg-paper: #252421;
-  --qj-base-bg-toolbar: #211f1d;
-  --qj-base-text: #d9d5cc;
-  --qj-base-text-light: #8f897d;
-  --qj-base-border: #383530;
-  --qj-base-border-strong: #4a463f;
+  --qj-base-bg: #181613;
+  --qj-base-bg-sidebar: #0f0c09;
+  --qj-base-bg-paper: #21201e;
+  --qj-base-bg-toolbar: #100f0d;
+  --qj-base-text: #eae7e3;
+  --qj-base-text-light: #9e9993;
+  --qj-base-border: #35312e;
+  --qj-base-border-strong: #4c4741;
 
-  --qj-tint-bg: 14%;
-  --qj-tint-bg-sidebar: 28%;
-  --qj-tint-bg-paper: 8%;
-  --qj-tint-bg-toolbar: 18%;
-  --qj-tint-text: 5%;
-  --qj-tint-text-light: 11%;
-  --qj-tint-border: 24%;
-  --qj-tint-border-strong: 32%;
-  --qj-bg-hover: color-mix(in oklab, var(--qj-accent) 16%, transparent);
+  --qj-tint-bg: 3%;
+  --qj-tint-bg-sidebar: 4%;
+  --qj-tint-bg-paper: 2%;
+  --qj-tint-bg-toolbar: 4%;
+  --qj-tint-text: 3%;
+  --qj-tint-text-light: 5%;
+  --qj-tint-border: 6%;
+  --qj-tint-border-strong: 8%;
+  --qj-bg-hover: color-mix(in oklab, var(--qj-accent) 10%, transparent);
 
   --qj-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
   --qj-overlay: rgba(0, 0, 0, 0.55);
@@ -102,48 +108,62 @@ html.light,
 html[data-theme="light"],
 html.light .qj-theme-preview,
 html[data-theme="light"] .qj-theme-preview {
-  --qj-bg: color-mix(in oklab, var(--qj-accent) var(--qj-tint-bg, 8%), var(--qj-base-bg));
+  --qj-bg: color-mix(in oklab, var(--qj-accent) var(--qj-tint-bg, 2%), var(--qj-base-bg));
   --qj-bg-sidebar: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-bg-sidebar, 18%),
+    var(--qj-accent) var(--qj-tint-bg-sidebar, 5%),
     var(--qj-base-bg-sidebar)
   );
   --qj-bg-paper: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-bg-paper, 5%),
+    var(--qj-accent) var(--qj-tint-bg-paper, 1.5%),
     var(--qj-base-bg-paper)
   );
   --qj-bg-toolbar: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-bg-toolbar, 12%),
+    var(--qj-accent) var(--qj-tint-bg-toolbar, 3.5%),
     var(--qj-base-bg-toolbar)
   );
-  --qj-text: color-mix(in oklab, var(--qj-accent) var(--qj-tint-text, 5%), var(--qj-base-text));
+  --qj-text: color-mix(in oklab, var(--qj-accent) var(--qj-tint-text, 2.5%), var(--qj-base-text));
   --qj-text-light: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-text-light, 13%),
+    var(--qj-accent) var(--qj-tint-text-light, 4%),
     var(--qj-base-text-light)
   );
+  /* 次级文字：介于正文和弱化文字之间。用在「已保存」、路径这类需要一点存在感、
+     但又不该和正文抢注意力的地方。由上面两个已派生的色混合得到，因此自动跟随
+     主题与明暗，不必再引入一组基底色。 */
+  --qj-text-secondary: color-mix(in oklab, var(--qj-text) 50%, var(--qj-text-light));
   --qj-border: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-border, 16%),
+    var(--qj-accent) var(--qj-tint-border, 5%),
     var(--qj-base-border)
   );
   --qj-border-strong: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-border-strong, 26%),
+    var(--qj-accent) var(--qj-tint-border-strong, 7%),
     var(--qj-base-border-strong)
   );
+
+  /* 活动行 / 选中项的表面色。由强调色与纸面现算，六个主题各自的深浅自动成立，
+     不必再写 12 个十六进制（它们最容易和强调色改动脱节）。浅色取 7%，
+     刚好让「强调色当文字」仍有 4.5:1 以上。 */
+  --qj-accent-light: color-mix(in oklab, var(--qj-accent) 7%, var(--qj-base-bg-paper));
+  /* 强调色当文字时的版本：向正文色压深。
+     直接拿 --qj-accent 当文字用，只有亮度够低的色相才能达标：macOS 蓝、IDEA 蓝
+     这类参考色本来就比青简那六个亮，在浅底色上只有 3.5:1。把它们压到能读，就
+     不再像它们自己了，所以宁肯多一个派生值：色度、色相全是原色，只降亮度。 */
+  --qj-accent-strong: color-mix(in oklab, var(--qj-accent) 74%, var(--qj-base-text));
 
   /* 弹层：菜单、下拉、浮动手柄。浅色纸面本身已近纯白，弹层只能靠
      「更白 + 描边 + 阴影」分层，所以底色只带极淡的强调色；对比度
      由 --qj-menu-icon 和 --qj-menu-border 提供。 */
-  --qj-bg-elevated: color-mix(in oklab, var(--qj-accent) 3%, #ffffff);
-  --qj-bg-elevated-low: color-mix(in oklab, var(--qj-accent) 7%, #f1efe9);
-  --qj-menu-icon: color-mix(in oklab, var(--qj-accent) 18%, #57534b);
-  --qj-menu-border: color-mix(in oklab, var(--qj-accent) 16%, #d5d0c5);
-  --qj-menu-hover: color-mix(in oklab, var(--qj-accent) 12%, transparent);
-  --qj-menu-selected: color-mix(in oklab, var(--qj-accent) 22%, transparent);
+  --qj-bg-elevated: color-mix(in oklab, var(--qj-accent) 1.5%, #fefefd);
+  --qj-bg-elevated-low: color-mix(in oklab, var(--qj-accent) 4%, #f6f4f1);
+  --qj-menu-icon: color-mix(in oklab, var(--qj-accent) 8%, #5c5750);
+  --qj-menu-border: color-mix(in oklab, var(--qj-accent) 6%, var(--qj-base-border-strong));
+  --qj-menu-hover: color-mix(in oklab, var(--qj-accent) 8%, transparent);
+  --qj-menu-selected: color-mix(in oklab, var(--qj-accent) 16%, transparent);
   /* 浅色下弹层和纸面几乎同亮度，分层主要靠阴影。--qj-shadow 对整页容器
      来说太重，这里单独给菜单一层更明显的投影。 */
   --qj-menu-shadow: 0 2px 6px rgba(0, 0, 0, 0.07), 0 12px 32px rgba(0, 0, 0, 0.16);
@@ -153,146 +173,203 @@ html.dark,
 html[data-theme="dark"],
 html.dark .qj-theme-preview,
 html[data-theme="dark"] .qj-theme-preview {
-  --qj-bg: color-mix(in oklab, var(--qj-accent) var(--qj-tint-bg, 14%), var(--qj-base-bg));
+  --qj-bg: color-mix(in oklab, var(--qj-accent) var(--qj-tint-bg, 3%), var(--qj-base-bg));
   --qj-bg-sidebar: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-bg-sidebar, 28%),
+    var(--qj-accent) var(--qj-tint-bg-sidebar, 4%),
     var(--qj-base-bg-sidebar)
   );
   --qj-bg-paper: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-bg-paper, 8%),
+    var(--qj-accent) var(--qj-tint-bg-paper, 2%),
     var(--qj-base-bg-paper)
   );
   --qj-bg-toolbar: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-bg-toolbar, 18%),
+    var(--qj-accent) var(--qj-tint-bg-toolbar, 4%),
     var(--qj-base-bg-toolbar)
   );
-  --qj-text: color-mix(in oklab, var(--qj-accent) var(--qj-tint-text, 5%), var(--qj-base-text));
+  --qj-text: color-mix(in oklab, var(--qj-accent) var(--qj-tint-text, 3%), var(--qj-base-text));
   --qj-text-light: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-text-light, 11%),
+    var(--qj-accent) var(--qj-tint-text-light, 5%),
     var(--qj-base-text-light)
   );
+  /* 次级文字，见浅色一节的说明。 */
+  --qj-text-secondary: color-mix(in oklab, var(--qj-text) 50%, var(--qj-text-light));
   --qj-border: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-border, 24%),
+    var(--qj-accent) var(--qj-tint-border, 6%),
     var(--qj-base-border)
   );
   --qj-border-strong: color-mix(
     in oklab,
-    var(--qj-accent) var(--qj-tint-border-strong, 32%),
+    var(--qj-accent) var(--qj-tint-border-strong, 8%),
     var(--qj-base-border-strong)
   );
 
+  /* 活动行 / 选中项的表面色，见浅色一节的说明。暗色需要更多强调色才看得出来。 */
+  --qj-accent-light: color-mix(in oklab, var(--qj-accent) 14%, var(--qj-base-bg-paper));
+  /* 强调色当文字的版本，向纸白提亮；比例比浅色高一点，因为深底上字要更亮才读得清。 */
+  --qj-accent-strong: color-mix(in oklab, var(--qj-accent) 78%, var(--qj-base-text));
+
   /* 弹层：菜单、下拉、浮动手柄。深色纸面很暗，弹层必须比纸面更亮才
      分得开；阴影在深底上几乎不可见，层级主要靠「提亮 + 描边」。 */
-  --qj-bg-elevated: color-mix(in oklab, var(--qj-accent) 12%, #322f2a);
-  --qj-bg-elevated-low: color-mix(in oklab, var(--qj-accent) 10%, #2c2a26);
-  --qj-menu-icon: color-mix(in oklab, var(--qj-accent) 18%, #c4beb1);
-  --qj-menu-border: color-mix(in oklab, var(--qj-accent) 16%, #524e46);
-  --qj-menu-hover: color-mix(in oklab, var(--qj-accent) 18%, transparent);
-  --qj-menu-selected: color-mix(in oklab, var(--qj-accent) 28%, transparent);
+  --qj-bg-elevated: color-mix(in oklab, var(--qj-accent) 5%, #2b2a28);
+  --qj-bg-elevated-low: color-mix(in oklab, var(--qj-accent) 4%, #262523);
+  --qj-menu-icon: color-mix(in oklab, var(--qj-accent) 8%, #b9b3a9);
+  --qj-menu-border: color-mix(in oklab, var(--qj-accent) 8%, var(--qj-base-border-strong));
+  --qj-menu-hover: color-mix(in oklab, var(--qj-accent) 12%, transparent);
+  --qj-menu-selected: color-mix(in oklab, var(--qj-accent) 22%, transparent);
   /* 深色下阴影几乎不可见（反正底就是黑的），分层靠提亮和描边，阴影保持
      全局值即可。 */
   --qj-menu-shadow: var(--qj-shadow);
 }
 
-/* ---------- 强调色：竹青 ---------- */
+/* ---------- 强调色 ----------
+   六个色相各自只差色相：同一模式内亮度统一（亮 0.51~0.53，暗 0.76），色度取该
+   色相在 sRGB 里的上限、封顶 0.155。这样切主题不会连带改变画布明暗，也不会
+   出现「某个颜色明显比别的都淡」。
 
+   苍碧是唯一例外：青绿段在 sRGB 里天生狭窄，L 0.52 处上限只有 0.089，再提就
+   出色域了，所以它确实比其他五个淡一点 —— 这是色域的事实，不是没调。
+
+   `--qj-accent-light` 不在这里写：它由强调色与纸面现算，见上面明暗两节的派生块。 */
+
+/* 竹青 */
 [data-qj-accent="bamboo"] {
-  --qj-accent: #4a7c59;
-  --qj-accent-hover: #3f6b4c;
-  --qj-accent-light: #e8f0ea;
+  --qj-accent: #017b40;
+  --qj-accent-hover: #026c37;
   --qj-accent-text: #ffffff;
 }
 
-html.dark[data-qj-accent="bamboo"] {
-  --qj-accent: #7ba885;
-  --qj-accent-hover: #8bb994;
-  --qj-accent-light: #26332b;
-  --qj-accent-text: #101711;
+/* 深色下写作后代选择器，设置面板里那张色卡（后代元素）才能跟着明暗走。 */
+html.dark[data-qj-accent="bamboo"],
+html.dark [data-qj-accent="bamboo"] {
+  --qj-accent: #53cd80;
+  --qj-accent-hover: #63dc8e;
+  --qj-accent-text: #0e0d0b;
 }
 
-/* ---------- 强调色：墨蓝 ---------- */
-
+/* 墨蓝 */
 [data-qj-accent="ink"] {
-  --qj-accent: #3b5b8c;
-  --qj-accent-hover: #324d77;
-  --qj-accent-light: #e6ebf3;
+  --qj-accent: #2e69c4;
+  --qj-accent-hover: #205bb5;
   --qj-accent-text: #ffffff;
 }
 
-html.dark[data-qj-accent="ink"] {
-  --qj-accent: #7d9cc9;
-  --qj-accent-hover: #8dabd5;
-  --qj-accent-light: #232a35;
-  --qj-accent-text: #0f131a;
+html.dark[data-qj-accent="ink"],
+html.dark [data-qj-accent="ink"] {
+  --qj-accent: #81b2ff;
+  --qj-accent-hover: #9ac1fe;
+  --qj-accent-text: #0e0d0b;
 }
 
-/* ---------- 强调色：胭脂 ---------- */
-
+/* 胭脂 */
 [data-qj-accent="rouge"] {
-  --qj-accent: #a3536b;
-  --qj-accent-hover: #8e475c;
-  --qj-accent-light: #f3e6ea;
+  --qj-accent: #ad3c6f;
+  --qj-accent-hover: #9e2d62;
   --qj-accent-text: #ffffff;
 }
 
-html.dark[data-qj-accent="rouge"] {
-  --qj-accent: #c08798;
-  --qj-accent-hover: #ca97a7;
-  --qj-accent-light: #352529;
-  --qj-accent-text: #1a0d11;
+html.dark[data-qj-accent="rouge"],
+html.dark [data-qj-accent="rouge"] {
+  --qj-accent: #fc84b4;
+  --qj-accent-hover: #fe9dc2;
+  --qj-accent-text: #0e0d0b;
 }
 
-/* ---------- 强调色：赭石 ---------- */
-
+/* 赭石 */
 [data-qj-accent="ochre"] {
-  --qj-accent: #9c5b34;
-  --qj-accent-hover: #8a4f2c;
-  --qj-accent-light: #f5e8df;
+  --qj-accent: #a35301;
+  --qj-accent-hover: #904902;
   --qj-accent-text: #ffffff;
 }
 
-html.dark[data-qj-accent="ochre"] {
-  --qj-accent: #c99a72;
-  --qj-accent-hover: #d5aa86;
-  --qj-accent-light: #33261d;
-  --qj-accent-text: #1a1109;
+html.dark[data-qj-accent="ochre"],
+html.dark [data-qj-accent="ochre"] {
+  --qj-accent: #fb9344;
+  --qj-accent-hover: #fea86c;
+  --qj-accent-text: #0e0d0b;
 }
 
-/* ---------- 强调色：黛紫 ---------- */
-
+/* 黛紫 */
 [data-qj-accent="violet"] {
-  --qj-accent: #6a5b93;
-  --qj-accent-hover: #5d4f82;
-  --qj-accent-light: #ece8f4;
+  --qj-accent: #7454ba;
+  --qj-accent-hover: #6847ac;
   --qj-accent-text: #ffffff;
 }
 
-html.dark[data-qj-accent="violet"] {
-  --qj-accent: #a99ccc;
-  --qj-accent-hover: #b7abd6;
-  --qj-accent-light: #2a2537;
-  --qj-accent-text: #150f1e;
+html.dark[data-qj-accent="violet"],
+html.dark [data-qj-accent="violet"] {
+  --qj-accent: #b89eff;
+  --qj-accent-hover: #c4b1ff;
+  --qj-accent-text: #0e0d0b;
 }
 
-/* ---------- 强调色：苍碧 ---------- */
-
+/* 苍碧 */
 [data-qj-accent="teal"] {
-  --qj-accent: #3f7d7a;
-  --qj-accent-hover: #366b69;
-  --qj-accent-light: #e2efee;
+  --qj-accent: #047773;
+  --qj-accent-hover: #056965;
   --qj-accent-text: #ffffff;
 }
 
-html.dark[data-qj-accent="teal"] {
-  --qj-accent: #7fb8b3;
-  --qj-accent-hover: #8fc5c0;
-  --qj-accent-light: #1d2f2e;
-  --qj-accent-text: #0c1717;
+html.dark[data-qj-accent="teal"],
+html.dark [data-qj-accent="teal"] {
+  --qj-accent: #02cbc3;
+  --qj-accent-hover: #2fdad2;
+  --qj-accent-text: #0e0d0b;
+}
+
+/* 墨白 */
+[data-qj-accent="mono"] {
+  --qj-accent: #2f2d2c;
+  --qj-accent-hover: #242221;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="mono"],
+html.dark [data-qj-accent="mono"] {
+  --qj-accent: #d7d4d1;
+  --qj-accent-hover: #e6e2e0;
+  --qj-accent-text: #0e0d0b;
+}
+
+/* 藤黄
+   传统颜料名，与赭石、胭脂同族。选它而不是另一个蓝，是因为色相环上
+   55°（赭石）到 153°（竹青）之间空了 98°，而蓝区已经站了墨蓝、IDEA 蓝与苍碧。
+   参考值：暗色 #daaa02 是这九个里最抢眼的一个；浅色受 AA 约束只能落在偏橄榄的
+   暗金上（金色要够亮才像金，但亮金做不了白底上的链接文字），这跟赭石当墨使时
+   同一个道理。 */
+[data-qj-accent="gamboge"] {
+  --qj-accent: #8d6d01;
+  --qj-accent-hover: #7d6103;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="gamboge"],
+html.dark [data-qj-accent="gamboge"] {
+  --qj-accent: #daaa02;
+  --qj-accent-hover: #e9b829;
+  --qj-accent-text: #0e0d0b;
+}
+
+/* IDEA 蓝
+   参考 JetBrains New UI 的 #3574f0（暗色版接近 #548af7）。同理：#3574f0 在浅
+   色纸上是 4.03:1，作为链接文字不达标，所以按同一色相压到过关。暗色版保持在
+   参考色的亮度上（0.64），因此比青简原来那六个明显更深、更浓，这是故意的，
+   否则它就变成第二个墨蓝了。 */
+[data-qj-accent="idea"] {
+  --qj-accent: #2669ed;
+  --qj-accent-hover: #175add;
+  --qj-accent-text: #ffffff;
+}
+
+html.dark[data-qj-accent="idea"],
+html.dark [data-qj-accent="idea"] {
+  --qj-accent: #4785ff;
+  --qj-accent-hover: #5f96fe;
+  --qj-accent-text: #0e0d0b;
 }
 
 /* ---------- HeroUI 变量联动 ----------
@@ -303,7 +380,10 @@ html.dark[data-qj-accent="teal"] {
 [data-qj-accent="rouge"],
 [data-qj-accent="ochre"],
 [data-qj-accent="violet"],
-[data-qj-accent="teal"] {
+[data-qj-accent="teal"],
+[data-qj-accent="mono"],
+[data-qj-accent="gamboge"],
+[data-qj-accent="idea"] {
   --accent: var(--qj-accent);
   --accent-hover: var(--qj-accent-hover);
   --accent-foreground: var(--qj-accent-text);
@@ -328,54 +408,57 @@ html.dark {
 
 /* ---------- 代码背景六色 ----------
    三亮：云白/暖沙/青瓷；三暗：石墨/墨玉/深空
-   变量由下面「代码块」一节消费（data-qj-codebg 挂编辑器容器） */
+   变量由下面「代码块」一节消费（data-qj-codebg 挂编辑器容器）
+
+   亮度统一按新阶梯重新对位：亮色三张略低于纸面（旧版云白比纸还白，代码块
+   反而比正文亮），暗色三张低于暗色纸面，读起来才是「嵌进去的一块」。 */
 
 [data-qj-codebg="cloud"] {
-  --qj-code-bg: #fbfcfe;
-  --qj-code-border: #dde3ec;
-  --qj-code-ln: #b3bccb;
-  --qj-code-ln-sep: #e6eaf1;
-  --qj-code-text: #2b3242;
+  --qj-code-bg: #f2f6fb;
+  --qj-code-border: #dadee3;
+  --qj-code-ln: #95999d;
+  --qj-code-ln-sep: #e7eaed;
+  --qj-code-text: #2a2e33;
 }
 
 [data-qj-codebg="sand"] {
-  --qj-code-bg: #faf6ee;
-  --qj-code-border: #e6ddc9;
-  --qj-code-ln: #b8ad93;
-  --qj-code-ln-sep: #ece4d2;
-  --qj-code-text: #3d3728;
+  --qj-code-bg: #f7f2e8;
+  --qj-code-border: #e1ddd8;
+  --qj-code-ln: #9b9893;
+  --qj-code-ln-sep: #ece9e5;
+  --qj-code-text: #302d28;
 }
 
 [data-qj-codebg="celadon"] {
-  --qj-code-bg: #f1f6f2;
-  --qj-code-border: #d2e0d7;
-  --qj-code-ln: #9db3a5;
-  --qj-code-ln-sep: #e0eae2;
-  --qj-code-text: #273b30;
+  --qj-code-bg: #eef6f0;
+  --qj-code-border: #dadfdb;
+  --qj-code-ln: #959a96;
+  --qj-code-ln-sep: #e7ebe7;
+  --qj-code-text: #2a2f2b;
 }
 
 [data-qj-codebg="graphite"] {
-  --qj-code-bg: #26282c;
-  --qj-code-border: #3a3d43;
-  --qj-code-ln: #5c626b;
-  --qj-code-ln-sep: #383b41;
-  --qj-code-text: #d4d7dc;
+  --qj-code-bg: #18191b;
+  --qj-code-border: #2c2e32;
+  --qj-code-ln: #727479;
+  --qj-code-ln-sep: #25272a;
+  --qj-code-text: #dde0e5;
 }
 
 [data-qj-codebg="jade"] {
-  --qj-code-bg: #1d2b26;
-  --qj-code-border: #2f4038;
-  --qj-code-ln: #55705f;
-  --qj-code-ln-sep: #2b3a33;
-  --qj-code-text: #cfdfd4;
+  --qj-code-bg: #121a16;
+  --qj-code-border: #2b302d;
+  --qj-code-ln: #717673;
+  --qj-code-ln-sep: #242826;
+  --qj-code-text: #dbe1de;
 }
 
 [data-qj-codebg="space"] {
-  --qj-code-bg: #1e2233;
-  --qj-code-border: #323852;
-  --qj-code-ln: #565f85;
-  --qj-code-ln-sep: #2c3249;
-  --qj-code-text: #d4d9ea;
+  --qj-code-bg: #121720;
+  --qj-code-border: #2c2e32;
+  --qj-code-ln: #727479;
+  --qj-code-ln-sep: #25272a;
+  --qj-code-text: #dde0e5;
 }
 
 /* ============================================================
@@ -412,50 +495,9 @@ html.dark {
 }
 
 /* ---------- 强调色的内嵌预览 ----------
-   上面的深色强调色写作 `html.dark[data-qj-accent=…]`，只命中根元素；
-   设置面板里的色卡是后代元素，这里补一组后代选择器让预览也跟随明暗。 */
-
-html.dark [data-qj-accent="bamboo"] {
-  --qj-accent: #7ba885;
-  --qj-accent-hover: #8bb994;
-  --qj-accent-light: #26332b;
-  --qj-accent-text: #101711;
-}
-
-html.dark [data-qj-accent="ink"] {
-  --qj-accent: #7d9cc9;
-  --qj-accent-hover: #8dabd5;
-  --qj-accent-light: #232a35;
-  --qj-accent-text: #0f131a;
-}
-
-html.dark [data-qj-accent="rouge"] {
-  --qj-accent: #c08798;
-  --qj-accent-hover: #ca97a7;
-  --qj-accent-light: #352529;
-  --qj-accent-text: #1a0d11;
-}
-
-html.dark [data-qj-accent="ochre"] {
-  --qj-accent: #c99a72;
-  --qj-accent-hover: #d5aa86;
-  --qj-accent-light: #33261d;
-  --qj-accent-text: #1a1109;
-}
-
-html.dark [data-qj-accent="violet"] {
-  --qj-accent: #a99ccc;
-  --qj-accent-hover: #b7abd6;
-  --qj-accent-light: #2a2537;
-  --qj-accent-text: #150f1e;
-}
-
-html.dark [data-qj-accent="teal"] {
-  --qj-accent: #7fb8b3;
-  --qj-accent-hover: #8fc5c0;
-  --qj-accent-light: #1d2f2e;
-  --qj-accent-text: #0c1717;
-}
+   上面的深色强调色已经写成 `html.dark[data-qj-accent=…],
+   html.dark [data-qj-accent=…]` 两个选择器一组，所以设置面板里的色卡
+   （后代元素）会跟着明暗走，这里不再需要第二份。 */
 
 /* ---------- 面板底色 ---------- */
 

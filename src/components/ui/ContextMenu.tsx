@@ -119,6 +119,9 @@ export function ContextMenu() {
       const target = event.target as Node;
       if (panelRef.current?.contains(target)) return;
       if (submenuRef.current?.contains(target)) return;
+      // A dropdown's own trigger has to stay clickable, or pressing it a second
+      // time would close the menu on mousedown and reopen it on click.
+      if (menu.anchor?.contains(target)) return;
       close();
     };
 
@@ -258,6 +261,7 @@ export function ContextMenu() {
               onMouseEnter={() => level === "root" && setOpenId(null)}
               onClick={() => activate(item)}
             >
+              {item.icon}
               <span>{item.label}</span>
             </button>
           ))}

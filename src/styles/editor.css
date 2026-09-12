@@ -93,9 +93,33 @@
   min-height: 100%;
 }
 
+/* ---------- 大文档：跳过屏幕外区块的渲染 ----------
+   `content-visibility: auto` 让浏览器把视口外区块的排版推迟到滚动过去时再做，
+   于是二三十万字的文档也能整篇交给编辑器，不必再降级成 textarea。类由
+   lib/editor/skip-render.ts 挂上——它只挑不会画出自身边框的区块，因为
+   content-visibility 会一并打开 paint containment，表格手柄、代码块语言选择器
+   这类浮出块外的部件会被裁掉。
+
+   contain-intrinsic-size 是没排版时的高度猜测。`auto` 前缀让浏览器记住区块真正
+   滚过一次后的高度，之后就用实测值；只有从未见过的区块才用后面那个估计值。少了
+   它，未渲染区块高度按 0 算，滚动条会在滚动过程中不停跳。5em 约等于两三行中文
+   段落，是长文里最常见的一段。 */
+.qj-skip-render {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 5em;
+}
+
+/* 打印要的是整篇，跳过渲染会让视口外的内容直接不出现在纸上。 */
+@media print {
+  .qj-skip-render {
+    content-visibility: visible;
+    contain-intrinsic-size: none;
+  }
+}
+
 /* ---------- 源代码模式 ----------
-   The textarea is sized from its own scroll height by EditorPane, so nothing
-   scrolls it internally and the page keeps a single scroll container. */
+   高度由内容撑开，页面只有一个滚动容器，切换模式时不会跳。具体规则见下方
+   `.qj-source-editor`。 */
 
 /* ---------- YAML 元数据 ----------
    The rich-text surface has no node for the block — Markdown would read its
@@ -160,6 +184,10 @@
   display: block;
   width: 100%;
   min-height: 100%;
+  /* 高度交给浏览器按内容算。原先是 EditorPane 每次 value 变化都读一遍
+     scrollHeight 再写回 style.height，那是一次同步强制重排——文档越长越贵，
+     恰好把源代码模式该有的“轻”给抵掉了。 */
+  field-sizing: content;
   padding: 44px 56px 200px;
   border: none;
   outline: none;

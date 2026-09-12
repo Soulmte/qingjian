@@ -406,7 +406,7 @@ export function FontPicker({
               bottom: placement.bottom,
             }}
           >
-            <div className="border-b border-border/60 p-1.5">
+            <div className="border-b border-border/80 p-1.5">
               <input
                 autoFocus
                 className="field w-full"

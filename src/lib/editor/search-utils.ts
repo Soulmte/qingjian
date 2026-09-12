@@ -94,3 +94,65 @@ export function centredScrollTop(
 ): number {
   return Math.max(scrollTop + (top - boxTop) - (boxHeight - matchHeight) / 2, 0);
 }
+
+/** Whether two ranges share at least one position. */
+function overlaps(a: SearchMatch, from: number, to: number): boolean {
+  return a.from < to && from < a.to;
+}
+
+/**
+ * Whether a match lies inside any of the given spans.
+ *
+ * Used to decide which of the previous matches an edit invalidated: everything
+ * inside a re-scanned span is about to be found again, so keeping the old copy
+ * would double it.
+ */
+export function withinAny(match: SearchMatch, spans: readonly SearchMatch[]): boolean {
+  return spans.some((span) => overlaps(match, span.from, span.to));
+}
+
+/**
+ * Merges two already-sorted runs of matches into one document-ordered list.
+ *
+ * Both inputs come out of a left-to-right scan, so this is a merge rather than a
+ * sort — the point of the incremental path is not to touch every match again.
+ * Identical ranges collapse, which keeps a span that was both kept and re-scanned
+ * from being reported twice.
+ */
+export function mergeMatches(
+  kept: readonly SearchMatch[],
+  found: readonly SearchMatch[],
+): SearchMatch[] {
+  const merged: SearchMatch[] = [];
+  let a = 0;
+  let b = 0;
+
+  const push = (match: SearchMatch) => {
+    const last = merged[merged.length - 1];
+    if (last && last.from === match.from && last.to === match.to) return;
+    merged.push(match);
+  };
+
+  while (a < kept.length && b < found.length) {
+    if (kept[a].from <= found[b].from) push(kept[a++]);
+    else push(found[b++]);
+  }
+  while (a < kept.length) push(kept[a++]);
+  while (b < found.length) push(found[b++]);
+
+  return merged;
+}
+
+/**
+ * The index of the match at `from`, or the nearest one after it.
+ *
+ * After an edit the highlighted match may be gone; the eye expects the next one
+ * down the document rather than a jump back to the top, so the search is for the
+ * first match that starts at or after where the current one used to be.
+ */
+export function indexAtOrAfter(matches: readonly SearchMatch[], from: number): number {
+  for (let index = 0; index < matches.length; index += 1) {
+    if (matches[index].from >= from) return index;
+  }
+  return 0;
+}

@@ -12,6 +12,22 @@ interface WorkspaceState {
   activeWorkspaceId: number | null;
 
   notes: Note[];
+  /**
+   * Subfolders of the active workspace, relative paths.
+   *
+   * The tree could be built from note paths alone, but then an empty folder —
+   * exactly what "新建文件夹" produces — would not appear at all.
+   */
+  folders: string[];
+  /**
+   * Folders created this session that hold no notes yet.
+   *
+   * The tree hides any folder whose subtree contains no markdown, so without
+   * this exemption a folder the user just made would vanish the moment it
+   * appeared. A folder that gains a note no longer needs it; one that never does
+   * is gone after a restart, which is the honest outcome.
+   */
+  pendingFolders: string[];
   activeNoteId: number | null;
 
   /** Editor buffer for the active note. */
@@ -52,9 +68,36 @@ interface WorkspaceState {
   checkExternalChange: () => Promise<void>;
 
   createNote: (relPath: string) => Promise<void>;
+  /** Creates a folder inside the active workspace; `relDir` may be nested. */
+  createFolder: (relDir: string) => Promise<void>;
+  /** Renames or moves a folder; every note inside moves with it. */
+  renameFolder: (relDir: string, newRelDir: string) => Promise<void>;
+  /** Moves a folder to the recycle bin and drops its notes from the index. */
+  deleteFolder: (relDir: string) => Promise<void>;
+  /** 在系统文件管理器里定位工作区内的一个路径（空字符串代表根目录）。 */
+  revealPath: (relPath: string) => Promise<void>;
   renameNote: (id: number, newRelPath: string) => Promise<void>;
   deleteNote: (id: number) => Promise<void>;
+  /** Re-reads the tree without rebuilding the note index. */
+  refreshTree: () => Promise<void>;
+  /** Rebuilds the note index from disk, picking up files changed outside 青简. */
   rescan: () => Promise<void>;
+}
+
+/**
+ * Rewrites exempt folder paths after one of them is moved or removed.
+ *
+ * The exemption is a set of paths, but a folder move carries everything below it
+ * along — so a folder whose parent was renamed has to be rewritten too, or
+ * renaming an empty folder would be the same as deleting it. `to === null`
+ * removes every path under `from`.
+ */
+function remapPending(pending: string[], from: string, to: string | null): string[] {
+  return pending.flatMap((path) => {
+    if (path !== from && !path.startsWith(`${from}/`)) return [path];
+    if (to === null) return [];
+    return [path === from ? to : `${to}${path.slice(from.length)}`];
+  });
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => {
@@ -114,10 +157,46 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     return notes;
   };
 
+  /**
+   * Notes plus folders, for whenever the tree can change shape: creating a note
+   * or folder, renaming, deleting.
+   *
+   * Folder listing is best-effort — a workspace whose folders cannot be read
+   * still renders its notes.
+   */
+  const loadTree = async (workspaceId: number) => {
+    const [notes, folders] = await Promise.all([
+      api.listNotes(workspaceId),
+      api.listFolders(workspaceId).catch(() => [] as string[]),
+    ]);
+    set({ notes, folders });
+    return notes;
+  };
+
+  /**
+   * Notes plus folders, rebuilt from disk.
+   *
+   * Only for opening a workspace. The note table is exactly as fresh as the last
+   * sync, so reading it alone would hide a `.md` that appeared on disk since then
+   * (a `git pull`, another editor, a file dragged into the folder) until the user
+   * ran a manual rescan. Folders were already scanned live, so the sidebar could
+   * otherwise show a folder and a file list that disagreed with each other.
+   */
+  const syncTree = async (workspaceId: number) => {
+    const [notes, folders] = await Promise.all([
+      api.syncWorkspace(workspaceId),
+      api.listFolders(workspaceId).catch(() => [] as string[]),
+    ]);
+    set({ notes, folders });
+    return notes;
+  };
+
   return {
     workspaces: [],
     activeWorkspaceId: null,
     notes: [],
+    folders: [],
+    pendingFolders: [],
     activeNoteId: null,
     content: "",
     contentLoaded: false,
@@ -182,11 +261,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         contentLoaded: false,
         diskHash: null,
         saveState: "idle",
+        // The exemptions belong to the workspace that is being left behind.
+        pendingFolders: [],
         error: null,
       });
 
       try {
-        const notes = await loadNotes(id);
+        const notes = await syncTree(id);
         const first = notes[0];
         if (first) await get().selectNote(first.id);
       } catch (error) {
@@ -367,8 +448,88 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
       try {
         const note = await api.createNote(workspaceId, relPath);
-        await loadNotes(workspaceId);
+        await loadTree(workspaceId);
         await get().selectNote(note.id);
+      } catch (error) {
+        set({ error: errorMessage(error) });
+      }
+    },
+
+    createFolder: async (relDir) => {
+      const workspaceId = get().activeWorkspaceId;
+      if (workspaceId === null) return;
+
+      try {
+        const created = await api.createFolder(workspaceId, relDir);
+        const folders = await api.listFolders(workspaceId);
+        set((state) => ({
+          folders,
+          // Only the folder that was made is exempt, not the folders above it:
+          // the tree already keeps a folder that leads to a kept child.
+          pendingFolders: [...state.pendingFolders, created],
+          error: null,
+        }));
+      } catch (error) {
+        set({ error: errorMessage(error) });
+      }
+    },
+
+    renameFolder: async (relDir, newRelDir) => {
+      const workspaceId = get().activeWorkspaceId;
+      if (workspaceId === null) return;
+
+      try {
+        const moved = await api.renameFolder(workspaceId, relDir, newRelDir);
+        set((state) => ({
+          pendingFolders: remapPending(state.pendingFolders, relDir, moved),
+        }));
+        // The open note's own path may have changed underneath it; the tree is
+        // re-read so the sidebar and the note list agree with the disk.
+        await loadTree(workspaceId);
+      } catch (error) {
+        set({ error: errorMessage(error) });
+      }
+    },
+
+    deleteFolder: async (relDir) => {
+      const workspaceId = get().activeWorkspaceId;
+      if (workspaceId === null) return;
+
+      // The open note may be inside that folder. Cancelling the scheduled save
+      // first is what stops the buffer from being written back a moment later,
+      // which would recreate the file that was just deleted.
+      cancelScheduledSave();
+
+      try {
+        await api.deleteFolder(workspaceId, relDir);
+        set((state) => ({ pendingFolders: remapPending(state.pendingFolders, relDir, null) }));
+        const notes = await loadTree(workspaceId);
+
+        const activeId = get().activeNoteId;
+        if (activeId !== null && !notes.some((note) => note.id === activeId)) {
+          // Cleared directly rather than through `closeNote`, which would flush
+          // the buffer to a path that no longer exists.
+          set({
+            activeNoteId: null,
+            content: "",
+            contentLoaded: false,
+            diskHash: null,
+            saveState: "idle",
+          });
+          const next = notes[0];
+          if (next) await get().selectNote(next.id);
+        }
+      } catch (error) {
+        set({ error: errorMessage(error) });
+      }
+    },
+
+    revealPath: async (relPath) => {
+      const workspaceId = get().activeWorkspaceId;
+      if (workspaceId === null) return;
+
+      try {
+        await api.revealInWorkspace(workspaceId, relPath);
       } catch (error) {
         set({ error: errorMessage(error) });
       }
@@ -376,17 +537,39 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     renameNote: async (id, newRelPath) => {
       try {
-        const note = await api.renameNote(id, newRelPath);
-        set((state) => ({
-          notes: state.notes.map((item) => (item.id === note.id ? note : item)),
-        }));
+        await api.renameNote(id, newRelPath);
+        const workspaceId = get().activeWorkspaceId;
+        // A rename can move the file into a folder that did not exist yet.
+        if (workspaceId !== null) await loadTree(workspaceId);
       } catch (error) {
         set({ error: errorMessage(error) });
       }
     },
 
-    /// Re-reads the workspace folder from disk, picking up files added or
-    /// removed outside the app.
+    /**
+     * Re-reads the tree without rebuilding the index.
+     *
+     * The cheap half of `rescan`: the note table is read as-is, so this only
+     * picks up what the app itself changed. The alternative is worth offering
+     * because reindexing walks the whole folder, which is the expensive half on
+     * a large workspace.
+     */
+    refreshTree: async () => {
+      const workspaceId = get().activeWorkspaceId;
+      if (workspaceId === null) return;
+
+      try {
+        await loadTree(workspaceId);
+      } catch (error) {
+        set({ error: errorMessage(error) });
+      }
+    },
+
+    /**
+     * Rebuilds the note index from disk, picking up files added or removed
+     * outside the app. Flushes first: the index is about to be rebuilt from
+     * what is on disk, so the buffer must be on disk too.
+     */
     rescan: async () => {
       const workspaceId = get().activeWorkspaceId;
       if (workspaceId === null) return;
@@ -394,8 +577,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       await get().flushSave();
 
       try {
-        const notes = await api.syncWorkspace(workspaceId);
-        set({ notes });
+        const notes = await syncTree(workspaceId);
 
         if (get().activeNoteId === null && notes[0]) {
           await get().selectNote(notes[0].id);

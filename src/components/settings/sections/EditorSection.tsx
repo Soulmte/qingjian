@@ -76,7 +76,7 @@ export function EditorSection() {
           stacked
         >
           <div
-            className="rounded-lg border border-border/60 bg-default/30 px-3 py-2.5 text-sm"
+            className="rounded-lg border border-border/80 bg-default/30 px-3 py-2.5 text-sm"
             style={{
               fontFamily: fontStack(editorFont, UI_FONT_FALLBACK),
               lineHeight,

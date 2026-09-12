@@ -82,6 +82,9 @@ export const ACCENTS: AccentName[] = [
   "ochre",
   "violet",
   "teal",
+  "mono",
+  "gamboge",
+  "idea",
 ];
 export const CODE_BACKGROUNDS: CodeBackgroundName[] = [
   "cloud",

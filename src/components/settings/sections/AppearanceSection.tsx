@@ -22,15 +22,27 @@ const ACCENT_LABELS: Record<AccentName, string> = {
   ochre: "赭石",
   violet: "黛紫",
   teal: "苍碧",
+  mono: "墨白",
+  gamboge: "藤黄",
+  idea: "IDEA 蓝",
 };
 
+/**
+ * 一句话说明就用色本身，不再描述「纸面偏冷/偏暖」。
+ *
+ * 强调色在画布上的占比已经收到 2% 上下，纸面几乎不变色；旧提示词描述的是那个
+ * 早已不存在的效果，会让人以为选错主题了。
+ */
 const ACCENT_HINTS: Record<AccentName, string> = {
-  bamboo: "草木绿，纸面偏暖",
-  ink: "砚台蓝，纸面偏冷",
-  rouge: "胭脂红，纸面偏暖粉",
-  ochre: "赭土橘，纸面偏暖褐",
-  violet: "黛紫罗，纸面偏冷紫",
-  teal: "苍碧青，纸面偏冷碧",
+  bamboo: "草木绿，竹简本色",
+  ink: "砚台蓝，沉静冷调",
+  rouge: "胭脂红，暖而不艳",
+  ochre: "赭土橘，陶器质感",
+  violet: "黛紫罗，冷调紫韵",
+  teal: "苍碧青，水色微青",
+  mono: "墨白，无色相的中性",
+  gamboge: "藤黄，颜料金",
+  idea: "JetBrains New UI 蓝",
 };
 
 const MODE_LABELS: Record<ThemeMode, string> = {
@@ -67,7 +79,7 @@ export function AppearanceSection() {
       <SettingGroup title="主题">
         <SettingRow
           label="主题色"
-          hint="强调色会一并调制纸面、侧栏、边框与文字，整块画布的色相都跟着变"
+          hint="强调色用在当前项、焦点环、主操作与链接上；画布只沾一点它的色相"
           stacked
         >
           <p className="mb-2.5 text-xs text-muted">
@@ -121,7 +133,7 @@ export function AppearanceSection() {
           stacked
         >
           <div
-            className="rounded-lg border border-border/60 bg-default/30 px-3 py-2.5 text-sm"
+            className="rounded-lg border border-border/80 bg-default/30 px-3 py-2.5 text-sm"
             style={{ fontFamily: fontStack(uiFont, UI_FONT_FALLBACK) }}
           >
             青简 Qingjian · 永和九年 Aa 0123 —— 编码之外，留一处安静写字的地方。

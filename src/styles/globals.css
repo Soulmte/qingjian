@@ -50,13 +50,19 @@ select:disabled {
   cursor: not-allowed;
 }
 
+/* 顶部工具栏是标签按钮的尺寸容器：文字显不显示，取决于「工具栏」有多宽，
+   而不是窗口有多宽 —— 侧边栏可以隐藏，也可以拖宽。 */
+.qj-topbar {
+  container-type: inline-size;
+}
+
 /* Minimal toolbar icon button: square-ish, quiet until hovered. */
 .tb-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 2rem;
+  height: 2rem;
   flex-shrink: 0;
   border: none;
   border-radius: max(4px, calc(var(--qj-radius) - 6px));
@@ -79,7 +85,7 @@ select:disabled {
 
 .tb-btn[aria-pressed="true"] {
   background: var(--qj-accent-light, var(--qj-bg-hover));
-  color: var(--qj-accent);
+  color: var(--qj-accent-strong);
 }
 
 .tb-btn:focus-visible {
@@ -93,15 +99,15 @@ select:disabled {
 }
 
 .tb-btn svg {
-  width: 1rem;
-  height: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
 }
 
 /* Tinted variant used where the action is the point of the region, such as
  * "new note". Keeps the accent colour visible in the main chrome. */
 .tb-btn--accent {
   background: var(--qj-accent-light);
-  color: var(--qj-accent);
+  color: var(--qj-accent-strong);
 }
 
 .tb-btn--accent:hover:not(:disabled) {
@@ -113,6 +119,44 @@ select:disabled {
 .tb-btn--danger:hover:not(:disabled) {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+/* 带文字的工具栏按钮：图标在上、文字在下。
+   横排（图标与文字并排）在默认窗口下放不下：侧边栏占去 264px 后，十八个按钮
+   都加文字会超过工具栏宽度，把中间的标题挤没；竖排能在同一宽度里把所有按钮
+   都标上文字。文字是短标签，完整名称留在 tooltip 里。
+
+   默认（窄窗口）仍然是纯图标，尺寸与普通图标按钮一致；工具栏够宽时才长高、
+   变宽并显示文字，见下面的容器查询。 */
+.tb-btn--text {
+  flex-direction: column;
+  gap: 2px;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  min-width: 0;
+}
+
+.tb-btn__label {
+  display: none;
+  font-size: 0.6875rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+/* 「够宽」按工具栏自身宽度判断，而不是窗口宽度：侧边栏可以隐藏，也可以拖宽。
+   阈值按十八个按钮加满文字所需宽度定（约 830px）。 */
+@container (min-width: 58rem) {
+  .tb-btn--text {
+    width: auto;
+    min-width: 2.25rem;
+    height: 2.375rem;
+    padding: 0.125rem 0.375rem;
+  }
+
+  .tb-btn__label {
+    display: block;
+  }
 }
 
 /* Text input matching the flat look; kept as a class so it can be reused by
@@ -140,16 +184,43 @@ select:disabled {
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
 }
 
+/* 次级文字：比 --muted 重、比正文轻，见 theme.css 的 --qj-text-secondary。 */
+.qj-text-secondary {
+  color: var(--qj-text-secondary);
+}
+
 .status-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  height: 1.75rem;
+  height: 2rem;
   flex-shrink: 0;
   border-top: 1px solid var(--separator);
   padding: 0 0.75rem;
   font-size: 0.75rem;
+}
+
+/* 状态栏里的图标与其文字同高，靠 gap 而非行高对齐。 */
+.status-bar svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+
+/* 空状态：图标在上、说明在下，整体居中。图标尺寸由调用方用 size-* 决定。 */
+.qj-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--qj-text-light);
+}
+
+.qj-empty svg {
+  opacity: 0.55;
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,13 +345,23 @@ select:disabled {
 .qj-menu-item__icon {
   display: none;
   flex-shrink: 0;
-  width: 14px;
-  height: 14px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--qj-menu-icon);
 }
 
-/* 图标可有可无；空容器不占位置，免得带图标和不带图标的条目左边错开。 */
+/* `:empty` 时整槽收起，没有图标的行不会凭空缩进。 */
 .qj-menu-item__icon:not(:empty) {
   display: inline-flex;
+}
+
+/* 必须显式定尺寸。lucide 图标默认 24px，而槽只有 16px，不约束的话图标会
+   溢出来、和文字不在一条线上——这正是「图标跟文字对不齐」的来源。 */
+.qj-menu-item__icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .qj-menu-item__label {
@@ -324,6 +405,10 @@ select:disabled {
 .qj-menu-segment {
   flex: 1 1 0;
   min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding: 4px 6px;
   border: none;
   border-radius: 5px;
@@ -336,6 +421,14 @@ select:disabled {
   transition:
     background-color 100ms ease,
     color 100ms ease;
+}
+
+/* 分段控件里的图标（目前只有对齐那一排有）。标题级别那排不配图标：
+   H1…H6 本身就是标签，再加一层符号只会把一排挤宽。 */
+.qj-menu-segment svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  flex-shrink: 0;
 }
 
 .qj-menu-segment:hover:not(:disabled):not(.is-selected) {

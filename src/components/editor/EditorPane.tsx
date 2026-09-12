@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { FileSearch, FolderPlus } from "lucide-react";
+import { useEffect, useRef, type CSSProperties } from "react";
 
 import { FindBar } from "@/components/editor/FindBar";
-import { QingjianMark } from "@/components/ui/QingjianMark";
 import { cn } from "@/lib/cn";
 import { fontStack, MONO_FONT_FALLBACK } from "@/lib/fonts";
 import { frontMatterKeys, frontMatterValue, parseFrontMatter } from "@/lib/front-matter";
-import { describeDocumentSize, isLargeDocument } from "@/lib/large-document";
 import { useSettings } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
@@ -25,15 +24,32 @@ function CenteredMessage({ children }: { children: React.ReactNode }) {
  *
  * The textarea grows with its content instead of scrolling internally, so the
  * page keeps a single scroll container and switching modes does not jump.
+ *
+ * The growing is CSS's job (`field-sizing: content`). This used to read
+ * `scrollHeight` and write `style.height` on every change, which is a forced
+ * synchronous reflow of the whole document per keystroke — the one thing source
+ * mode exists to avoid. The measuring fallback below is kept for engines without
+ * `field-sizing`, and even then it is coalesced into an animation frame so a
+ * burst of input reflows once rather than per character.
  */
+const SUPPORTS_FIELD_SIZING =
+  typeof CSS !== "undefined" && CSS.supports?.("field-sizing", "content");
+
 function SourceEditor({ value, onChange }: { value: string; onChange: (next: string) => void }) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
+    if (SUPPORTS_FIELD_SIZING) return;
+
     const element = ref.current;
     if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
+
+    const frame = requestAnimationFrame(() => {
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    });
+
+    return () => cancelAnimationFrame(frame);
   }, [value]);
 
   return (
@@ -59,9 +75,6 @@ export function EditorPane() {
   const isSourceMode = useUi((state) => state.isSourceMode);
   const setFrontMatterOpen = useUi((state) => state.setFrontMatterOpen);
 
-  // The note for which the user asked for the rich surface despite its size.
-  const [richTextOverride, setRichTextOverride] = useState<number | null>(null);
-
   const fontSize = useSettings((state) => state.settings.fontSize);
   const lineHeight = useSettings((state) => state.settings.lineHeight);
   const editorWidth = useSettings((state) => state.settings.editorWidth);
@@ -74,9 +87,11 @@ export function EditorPane() {
   if (activeWorkspaceId === null) {
     return (
       <CenteredMessage>
-        <QingjianMark size={64} className="mb-1 opacity-80" />
+        <FolderPlus className="size-6" />
         <p className="text-sm">还没有打开工作区</p>
-        <p className="text-xs">在左侧选择一个本地文件夹，即可开始书写</p>
+        <p className="max-w-sm text-xs">
+          点左侧顶部的「打开工作区」选一个本地文件夹，青简会把其中的 Markdown 文件列成文件树
+        </p>
       </CenteredMessage>
     );
   }
@@ -92,8 +107,9 @@ export function EditorPane() {
   if (activeNoteId === null) {
     return (
       <CenteredMessage>
-        <QingjianMark size={64} className="mb-1 opacity-80" />
-        <p className="text-sm">选择一篇笔记，或新建一篇</p>
+        <FileSearch className="size-6" />
+        <p className="text-sm">还没有打开笔记</p>
+        <p className="text-xs">在左侧文件树里点一篇，或按 Ctrl + N 新建</p>
       </CenteredMessage>
     );
   }
@@ -102,12 +118,10 @@ export function EditorPane() {
     return <CenteredMessage>正在打开…</CenteredMessage>;
   }
 
-  // A large document is opened as source first: Milkdown builds a node per
-  // element and a first render of a very long note is not instant, while the
-  // textarea stays responsive. The user can still ask for the rich surface.
-  const large = isLargeDocument(content);
-  const autoSource = large && richTextOverride !== activeNoteId;
-  const showRichText = !isSourceMode && !autoSource;
+  // A long note is handed to the editor whole: the rendering of off-screen
+  // blocks is what gets skipped now (see `lib/editor/skip-render`), so there is
+  // no longer a size at which the document is demoted to a textarea.
+  const showRichText = !isSourceMode;
 
   // `--crepe-base-font-size` drives every scale step in the editor, so pointing
   // it at the user's font size keeps headings and body text in proportion.
@@ -140,21 +154,6 @@ export function EditorPane() {
           data-qj-codebg={codeBackground}
           style={columnStyle}
         >
-          {autoSource && !isSourceMode && (
-            <div className="qj-meta-bar">
-              <span className="qj-meta-bar__tag">大文件</span>
-              <span className="qj-meta-bar__keys">
-                {`${describeDocumentSize(content)}，已用源代码模式打开以保证流畅`}
-              </span>
-              <button
-                type="button"
-                className="qj-meta-bar__edit"
-                onClick={() => setRichTextOverride(activeNoteId)}
-              >
-                用所见即所得打开
-              </button>
-            </div>
-          )}
           {showRichText && frontMatter.raw && (
             <div className="qj-meta-bar">
               <span className="qj-meta-bar__tag">YAML</span>

@@ -39,4 +39,14 @@ describe("toolbar layout", () => {
     expect(index("ALIGN")).toBeLessThan(index("TITLE"));
     expect(index("TITLE")).toBeLessThan(index("settings.open"));
   });
+
+  it("gives every button a compact label", () => {
+    // The bar draws `short` under the icon. Without one a button falls back to
+    // its full title, which is too wide for an eighteen-button strip and pushes
+    // the title slot off the bar.
+    for (const command of TOOLBAR_COMMANDS) {
+      expect(command.short, `${command.id} has no short label`).toBeTruthy();
+      expect(command.icon, `${command.id} has no icon`).toBeTruthy();
+    }
+  });
 });

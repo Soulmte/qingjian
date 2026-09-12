@@ -48,6 +48,10 @@ export default function App() {
   const setPendingDeleteNoteId = useUi((state) => state.setPendingDeleteNoteId);
   const renamingNoteId = useUi((state) => state.renamingNoteId);
   const setRenamingNoteId = useUi((state) => state.setRenamingNoteId);
+  const renamingFolder = useUi((state) => state.renamingFolder);
+  const setRenamingFolder = useUi((state) => state.setRenamingFolder);
+  const pendingDeleteFolder = useUi((state) => state.pendingDeleteFolder);
+  const setPendingDeleteFolder = useUi((state) => state.setPendingDeleteFolder);
 
   const initWorkspace = useWorkspace((state) => state.init);
   const flushSave = useWorkspace((state) => state.flushSave);
@@ -59,6 +63,8 @@ export default function App() {
   const overwriteFromDisk = useWorkspace((state) => state.overwriteFromDisk);
   const deleteNote = useWorkspace((state) => state.deleteNote);
   const renameNote = useWorkspace((state) => state.renameNote);
+  const renameFolder = useWorkspace((state) => state.renameFolder);
+  const deleteFolder = useWorkspace((state) => state.deleteFolder);
 
   const pendingDelete = notes.find((item) => item.id === pendingDeleteNoteId) ?? null;
   const renaming = notes.find((item) => item.id === renamingNoteId) ?? null;
@@ -71,6 +77,15 @@ export default function App() {
     return {
       folder: index > 0 ? withoutExtension.slice(0, index) : "",
       title: index > 0 ? withoutExtension.slice(index + 1) : withoutExtension,
+    };
+  };
+
+  /** A folder path split into its parent and its own name. */
+  const folderParts = (path: string) => {
+    const index = path.lastIndexOf("/");
+    return {
+      parent: index > 0 ? path.slice(0, index) : "",
+      name: index > 0 ? path.slice(index + 1) : path,
     };
   };
 
@@ -268,14 +283,14 @@ export default function App() {
 
       <main className="flex min-w-0 flex-1 flex-col">
         {settingsError && (
-          <div className="shrink-0 border-b border-border/60 bg-danger-soft px-3 py-1.5 text-xs text-danger-soft-foreground">
+          <div className="shrink-0 border-b border-border/80 bg-danger-soft px-3 py-1.5 text-xs text-danger-soft-foreground">
             设置读取失败，正在使用默认设置：{settingsError}
           </div>
         )}
 
         {/* Shown once, when the database had to be rebuilt at startup. */}
         {startupNotice && (
-          <div className="flex shrink-0 items-start gap-3 border-b border-border/60 bg-warning-soft px-3 py-2 text-xs text-warning-soft-foreground">
+          <div className="flex shrink-0 items-start gap-3 border-b border-border/80 bg-warning-soft px-3 py-2 text-xs text-warning-soft-foreground">
             <p className="min-w-0 flex-1 whitespace-pre-line">{startupNotice}</p>
             <button
               type="button"
@@ -290,7 +305,7 @@ export default function App() {
         {/* The file changed under the app and there is unsaved work of our own,
             so only the user can say which version survives. */}
         {saveState === "conflict" && (
-          <div className="flex shrink-0 items-start gap-3 border-b border-border/60 bg-warning-soft px-3 py-2 text-xs text-warning-soft-foreground">
+          <div className="flex shrink-0 items-start gap-3 border-b border-border/80 bg-warning-soft px-3 py-2 text-xs text-warning-soft-foreground">
             <p className="min-w-0 flex-1">
               「{conflicted?.relPath ?? "当前笔记"}」已被其它程序修改，为避免覆盖，本次保存已暂停。
             </p>
@@ -319,7 +334,7 @@ export default function App() {
           </div>
 
           {showOutline && (
-            <aside className="qj-paper w-60 shrink-0 overflow-y-auto border-l border-border/60">
+            <aside className="qj-paper w-60 shrink-0 overflow-y-auto border-l border-border/80">
               <Outline />
             </aside>
           )}
@@ -371,6 +386,40 @@ export default function App() {
         confirmLabel="删除"
         onConfirm={() => {
           if (pendingDelete) void deleteNote(pendingDelete.id);
+        }}
+      />
+
+      {/* Folders get the same pair of dialogs as notes: a rename reuses the path
+          dialog in folder mode, and deleting asks first. */}
+      <NotePathDialog
+        isOpen={renamingFolder !== null}
+        onOpenChange={(open) => {
+          if (!open) setRenamingFolder(null);
+        }}
+        heading="重命名文件夹"
+        confirmLabel="重命名"
+        kind="folder"
+        initialFolder={renamingFolder ? folderParts(renamingFolder).parent : ""}
+        initialTitle={renamingFolder ? folderParts(renamingFolder).name : ""}
+        onSubmit={(relDir) => {
+          if (renamingFolder) void renameFolder(renamingFolder, relDir);
+        }}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteFolder !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteFolder(null);
+        }}
+        title="删除这个文件夹？"
+        description={
+          pendingDeleteFolder
+            ? `“${pendingDeleteFolder}” 和里面的所有笔记会移入系统回收站，之后仍可从回收站还原。`
+            : ""
+        }
+        confirmLabel="删除"
+        onConfirm={() => {
+          if (pendingDeleteFolder) void deleteFolder(pendingDeleteFolder);
         }}
       />
     </div>

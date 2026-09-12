@@ -41,7 +41,7 @@ export function FrontMatterDialog() {
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setOpen}>
       <Modal.Container size="lg">
         <Modal.Dialog className="qj-dialog" aria-label="YAML 元数据">
-          <div className="border-b border-border/60 px-4 py-3">
+          <div className="border-b border-border/80 px-4 py-3">
             <h2 className="text-sm font-medium">YAML 元数据</h2>
           </div>
 
@@ -66,7 +66,7 @@ export function FrontMatterDialog() {
             />
           </div>
 
-          <div className="flex justify-end gap-2 border-t border-border/60 px-4 py-2.5">
+          <div className="flex justify-end gap-2 border-t border-border/80 px-4 py-2.5">
             <Button variant="ghost" onPress={() => setOpen(false)}>
               取消
             </Button>

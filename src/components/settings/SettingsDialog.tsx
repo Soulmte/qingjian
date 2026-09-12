@@ -83,10 +83,10 @@ export function SettingsDialog() {
       <Modal.Container size="lg">
         <Modal.Dialog className="qj-settings" aria-label="设置">
           <div className="flex min-h-0 flex-1">
-            <nav className="qj-sidebar flex w-48 shrink-0 flex-col overflow-y-auto border-r border-border/60 px-2.5 py-3">
+            <nav className="qj-sidebar flex w-48 shrink-0 flex-col overflow-y-auto border-r border-border/80 px-2.5 py-3">
               {SETTINGS_NAV.map((group, groupIndex) => (
                 <div key={group.group}>
-                  {groupIndex > 0 && <hr className="my-3 border-0 border-t border-border/60" />}
+                  {groupIndex > 0 && <hr className="my-3 border-0 border-t border-border/80" />}
                   <p className="mb-1.5 px-2 text-[11px] font-semibold tracking-wide text-muted uppercase">
                     {group.group}
                   </p>
@@ -117,7 +117,7 @@ export function SettingsDialog() {
             </nav>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <header className="qj-toolbar flex h-11 shrink-0 items-center justify-between border-b border-border/60 px-4">
+              <header className="qj-toolbar flex h-12 shrink-0 items-center justify-between border-b border-border/80 px-4">
                 <span className="text-sm font-medium">{SECTION_META[section].label}</span>
                 <ToolbarButton label="关闭设置（Esc）" onPress={() => setSettingsOpen(false)}>
                   <X />

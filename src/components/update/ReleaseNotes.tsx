@@ -121,7 +121,7 @@ function blocks(list: Block[], prefix: string): ReactNode[] {
           </blockquote>
         );
       case "hr":
-        return <hr key={key} className="my-2.5 border-0 border-t border-border/60" />;
+        return <hr key={key} className="my-2.5 border-0 border-t border-border/80" />;
       // 表格与图片在更新说明里不常见，宁可少显示也不塞进一个没样式的宽表
       case "table":
       case "image":

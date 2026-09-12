@@ -46,6 +46,9 @@ const ACCENT_LABELS: Record<AccentName, string> = {
   ochre: "赭石",
   violet: "黛紫",
   teal: "苍碧",
+  mono: "墨白",
+  gamboge: "藤黄",
+  idea: "IDEA 蓝",
 };
 
 /**
@@ -132,7 +135,7 @@ export function CommandPalette() {
     <Modal.Backdrop isOpen={isOpen} onOpenChange={setPaletteOpen} variant="blur">
       <Modal.Container size="lg" placement="top">
         <Modal.Dialog className="qj-palette" aria-label="命令面板">
-          <div className="border-b border-border/60 p-2">
+          <div className="border-b border-border/80 p-2">
             <input
               autoFocus
               className="field w-full"
@@ -196,7 +199,7 @@ export function CommandPalette() {
             )}
           </ul>
 
-          <div className="flex items-center gap-3 border-t border-border/60 px-3 py-1.5 text-[11px] text-muted">
+          <div className="flex items-center gap-3 border-t border-border/80 px-3 py-1.5 text-[11px] text-muted">
             <span>↑↓ 选择</span>
             <span>Enter 执行</span>
             <span>Esc 关闭</span>
