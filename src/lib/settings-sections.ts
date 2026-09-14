@@ -116,6 +116,7 @@ export const SECTION_KEYS: Record<SettingsSection, string[]> = {
     "showSidebar",
     "showOutline",
     "sidebarWidth",
+    "infoWidth",
   ],
   updates: ["autoCheckUpdate", "lastUpdateCheck", "updateProxy"],
   shortcuts: [],

@@ -18,7 +18,7 @@ import {
   type ClipboardImagePlan,
 } from "@/lib/clipboard-image";
 import { alignPlugin, alignedHeadingSchema, alignedParagraphSchema, remarkBlockAlignPlugin } from "@/lib/editor/align-plugin";
-import { canvasCodec, compressImage } from "@/lib/image-compress";
+import { canvasCodec, compressImage, describeCompression } from "@/lib/image-compress";
 import { alignmentForUi } from "@/lib/editor/align-selection";
 import {
   consumePlainPaste,
@@ -310,14 +310,18 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
         // 文件名跟着**压完**的格式走：PNG 转成 JPEG 之后扩展名必须跟着变。
         const stored = await storeImage(imageFileName(prepared.mime, hint), prepared.bytes);
 
+        // 压得明显就说一句：图片被静默重写过，用户有权知道。
+        const compressed = describeCompression(resolved.bytes.length, prepared.bytes.length);
+
         if (imageAutoInsert) {
           crepe.editor.action(insert(stored.markdown));
+          if (compressed) setNotice(`图片${compressed}`);
         } else {
-          setNotice(
+          const location =
             stored.location === "git"
               ? `已上传图床：${stored.reference}`
-              : `图片已保存：${stored.reference}`,
-          );
+              : `图片已保存：${stored.reference}`;
+          setNotice(compressed ? `${location}（${compressed}）` : location);
         }
       } catch (error) {
         setNotice(`图片保存失败：${errorMessage(error)}`);

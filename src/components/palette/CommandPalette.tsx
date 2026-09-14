@@ -78,6 +78,10 @@ function buildEntries(): PaletteEntry[] {
       id: `accent.${accent}`,
       title: `强调色：${title}`,
       group: "外观",
+      // 色块而不是图标：九个色相各配一个相同的小图标等于没给信息。颜色从这个
+      // 色相自己的 `--qj-accent` 取（`[data-qj-accent]` 的声明会命中这个元素
+      // 本身），所以 theme.css 改色时这里自动跟着变，不必在 JS 里再抄一份。
+      icon: <span className="qj-accent-swatch" data-qj-accent={accent} />,
       run: () => settings().update("accent", accent),
     });
   }

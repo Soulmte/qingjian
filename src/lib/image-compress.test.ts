@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ResolvedImage } from "@/lib/clipboard-image";
 import {
   compressImage,
+  describeCompression,
   scaledSize,
   targetMime,
   type DecodedImage,
@@ -77,6 +78,27 @@ describe("targetMime", () => {
 
   it("leaves JPEG as JPEG", () => {
     expect(targetMime("image/jpeg", false)).toBe("image/jpeg");
+  });
+});
+
+describe("describeCompression", () => {
+  it("reads as a before-and-after when it saved a lot", () => {
+    expect(describeCompression(17_610_619, 8_058_827)).toBe("已压缩 16.8 MB → 7.7 MB");
+  });
+
+  it("stays quiet when the saving is not worth mentioning", () => {
+    // 顺手把一张本来就紧的图重编了一遍：说了只是噪音。
+    expect(describeCompression(500_000, 460_000)).toBeNull();
+  });
+
+  it("says nothing when nothing was saved", () => {
+    expect(describeCompression(500_000, 500_000)).toBeNull();
+    // 压完变大时会回退到原图，所以出现在这里的不会是「变大」。
+    expect(describeCompression(500_000, 600_000)).toBeNull();
+  });
+
+  it("does not divide by an empty image", () => {
+    expect(describeCompression(0, 0)).toBeNull();
   });
 });
 

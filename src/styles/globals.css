@@ -274,6 +274,42 @@ select:disabled {
   flex-shrink: 0;
 }
 
+/* 状态栏里可点的那一项（目前是「历史版本」）。悬停时给出底色，否则夹在几段
+   纯文字之间看不出能点。 */
+.qj-status-action {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.4375rem;
+  border-radius: max(4px, calc(var(--qj-radius) - 8px));
+  color: var(--qj-text-light);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.qj-status-action:hover {
+  background: var(--qj-bg-hover);
+  color: var(--qj-text);
+}
+
+/* 命令面板里的强调色色块。颜色取自该色相自己的变量，所以只需要尺寸和边界。 */
+.qj-accent-swatch {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--qj-accent);
+  /* 浅色模式下浅色块与纸面几乎同色，一圈内描边把它勾出来。 */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+}
+
+/* 深色模式下每个色相的 `--qj-accent` 另有一套更亮的值，而那套写在
+   `html.dark[data-qj-accent=…]` 上，命中不了一个小色块。提一下亮度让它接近
+   深色模式实际会用到的颜色——色块是给人看色相的，差这一档无伤。 */
+html.dark .qj-accent-swatch {
+  filter: brightness(1.35) saturate(0.92);
+}
+
 /* 空状态：图标在上、说明在下，整体居中。图标尺寸由调用方用 size-* 决定。 */
 .qj-empty {
   display: flex;

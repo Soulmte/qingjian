@@ -14,6 +14,7 @@ export function BehaviorSection() {
   const [showSidebar, setShowSidebar] = useSetting("showSidebar");
   const [showOutline, setShowOutline] = useSetting("showOutline");
   const [sidebarWidth, setSidebarWidth] = useSetting("sidebarWidth");
+  const [infoWidth, setInfoWidth] = useSetting("infoWidth");
 
   const [isResetOpen, setIsResetOpen] = useState(false);
 
@@ -60,14 +61,25 @@ export function BehaviorSection() {
         <SettingRow label="默认显示大纲">
           <Toggle ariaLabel="默认显示大纲" checked={showOutline} onChange={setShowOutline} />
         </SettingRow>
-        <SettingRow label="侧边栏宽度" hint="也可以在界面上直接拖拽分栏边框">
+        <SettingRow label="侧边栏宽度" hint="可以直接拖分栏边框；双击边框恢复默认">
           <RangeField
             ariaLabel="侧边栏宽度"
             value={sidebarWidth}
             min={200}
-            max={420}
+            max={520}
             step={4}
             onChange={setSidebarWidth}
+            unit="px"
+          />
+        </SettingRow>
+        <SettingRow label="大纲宽度" hint="右侧大纲 / 信息栏；同样可以拖边框，双击恢复默认">
+          <RangeField
+            ariaLabel="大纲宽度"
+            value={infoWidth}
+            min={180}
+            max={560}
+            step={4}
+            onChange={setInfoWidth}
             unit="px"
           />
         </SettingRow>

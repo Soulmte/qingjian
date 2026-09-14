@@ -1,9 +1,10 @@
-import { Check, CircleAlert, LoaderCircle, PencilLine, Type } from "lucide-react";
+import { Check, CircleAlert, History, LoaderCircle, PencilLine, Type } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { countCharacters, countWords } from "@/lib/markdown";
+import { useUi } from "@/stores/ui";
 import { useWorkspace, type SaveState } from "@/stores/workspace";
 
 const SAVE_LABEL: Record<SaveState, string> = {
@@ -84,6 +85,8 @@ export function StatusBar() {
   const saveState = useWorkspace((state) => state.saveState);
   const activeNoteId = useWorkspace((state) => state.activeNoteId);
   const notes = useWorkspace((state) => state.notes);
+  // 历史版本入口就在这一栏：侧栏的右键菜单里也有一份，但那条路径要先找到那一行。
+  const setHistoryNoteId = useUi((state) => state.setHistoryNoteId);
 
   const note = notes.find((item) => item.id === activeNoteId) ?? null;
   const { words, characters } = useDocumentStats(contentLoaded, activeNoteId);
@@ -102,6 +105,15 @@ export function StatusBar() {
     <footer className="status-bar qj-toolbar">
       <span className="truncate qj-text-secondary">{note?.relPath ?? ""}</span>
       <span className="flex shrink-0 items-center gap-4">
+        <button
+          type="button"
+          className="qj-status-action"
+          title="历史版本（右键侧栏里的笔记也有这一项）"
+          onClick={() => setHistoryNoteId(activeNoteId)}
+        >
+          <History aria-hidden />
+          历史版本
+        </button>
         <span className="flex items-center gap-1.5 qj-text-secondary" title="字数统计">
           <Type aria-hidden />
           {words} 词 · {characters} 字符

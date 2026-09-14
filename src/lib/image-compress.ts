@@ -19,6 +19,7 @@
  */
 
 import type { ResolvedImage } from "@/lib/clipboard-image";
+import { formatBytes } from "@/lib/bytes";
 
 /** 用户设置里的三个旋钮。 */
 export interface CompressOptions {
@@ -138,6 +139,20 @@ export async function compressImage(
   } finally {
     decoded.close();
   }
+}
+
+/**
+ * 一句话说明这次压掉了多少；不值得说时返回 `null`。
+ *
+ * 图片是被**静默重写**过的，用户有权知道自己贴进去的那张图变了——尤其当它变糊
+ * 的时候。但省得不多的时候（顺手把一张已经很紧的 JPEG 重编了一遍）提它只是噪音，
+ * 会把「保存失败」这类真正要紧的话淹掉，所以定一个门槛。
+ */
+export function describeCompression(before: number, after: number): string | null {
+  if (before <= 0 || after <= 0 || after >= before) return null;
+  if (1 - after / before < 0.2) return null;
+
+  return `已压缩 ${formatBytes(before)} → ${formatBytes(after)}`;
 }
 
 /** canvas 那一套。只在真正跑起来的界面里用得到。 */

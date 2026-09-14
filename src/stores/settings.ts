@@ -50,6 +50,7 @@ export const defaultSettings: AppSettings = {
   showSidebar: true,
   showOutline: true,
   sidebarWidth: 264,
+  infoWidth: 288,
 
   exportFormat: "docx",
   exportBodyFont: "",
@@ -199,6 +200,7 @@ export function sanitizeSettings(raw: Record<string, unknown>): AppSettings {
     showSidebar: bool(raw.showSidebar, d.showSidebar),
     showOutline: bool(raw.showOutline, d.showOutline),
     sidebarWidth: clamp(raw.sidebarWidth, 200, 520, d.sidebarWidth),
+    infoWidth: clamp(raw.infoWidth, 180, 560, d.infoWidth),
 
     exportFormat: pick(raw.exportFormat, ["docx", "pdf", "html", "txt", "md"], d.exportFormat),
     exportBodyFont: text(raw.exportBodyFont, "", 120),

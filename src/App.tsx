@@ -23,7 +23,7 @@ import { cn } from "@/lib/cn";
 import { runMatchingCommand, openPathFromDisk } from "@/lib/commands";
 import { useThemeSync } from "@/lib/theme";
 import { checkForUpdates, type Update } from "@/lib/update";
-import { useSettings } from "@/stores/settings";
+import { defaultSettings, useSettings } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
 import { useUpdate } from "@/stores/update";
 import { useWorkspace } from "@/stores/workspace";
@@ -33,12 +33,16 @@ import { UpdateDialog } from "./components/update/UpdateDialog";
 /** Bounds for the sidebar drag handle, matching the settings slider. */
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 420;
+/** Bounds for the outline / info panel's drag handle. */
+const OUTLINE_MIN = 180;
+const OUTLINE_MAX = 560;
 
 export default function App() {
   const settingsLoaded = useSettings((state) => state.loaded);
   const settingsError = useSettings((state) => state.error);
   const loadSettings = useSettings((state) => state.load);
   const sidebarWidth = useSettings((state) => state.settings.sidebarWidth);
+  const infoWidth = useSettings((state) => state.settings.infoWidth);
   const showOutline = useSettings((state) => state.settings.showOutline);
   const showSidebar = useSettings((state) => state.settings.showSidebar);
   const zoom = useSettings((state) => state.settings.zoom);
@@ -98,7 +102,9 @@ export default function App() {
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [updateOpen, setUpdateOpen] = useState(false);
 
-  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<{ panel: "sidebar" | "outline"; width: number } | null>(
+    null,
+  );
 
   useThemeSync();
 
@@ -304,28 +310,35 @@ export default function App() {
   }, [checkExternalChange]);
 
   /**
-   * Drags the divider between the sidebar and the editor. The width is kept
-   * local while dragging so the setting — and therefore SQLite — is only
-   * written once, on release.
+   * 拖动分栏边框。
+   *
+   * 拖动过程中宽度只留在本地，松手时才写设置——也就只在松手时写一次库。侧栏在
+   * 左边、大纲在右边，所以同一个位移在两个方向上含义相反。
    */
-  const startResize = (event: React.MouseEvent) => {
+  const startResize = (
+    event: React.MouseEvent,
+    panel: "sidebar" | "outline",
+    from: number,
+    min: number,
+    max: number,
+  ) => {
     event.preventDefault();
     const startX = event.clientX;
-    const startWidth = sidebarWidth;
+    const direction = panel === "sidebar" ? 1 : -1;
 
     const onMove = (moveEvent: MouseEvent) => {
-      const next = Math.min(
-        SIDEBAR_MAX,
-        Math.max(SIDEBAR_MIN, startWidth + moveEvent.clientX - startX),
-      );
-      setDragWidth(next);
+      const delta = (moveEvent.clientX - startX) * direction;
+      setDragging({ panel, width: Math.min(max, Math.max(min, from + delta)) });
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
-      setDragWidth((value) => {
-        if (value !== null) updateSetting("sidebarWidth", value);
+      // 从 updater 里读当前值：`setDragging(null)` 之后就没有它了。
+      setDragging((current) => {
+        if (current) {
+          updateSetting(current.panel === "sidebar" ? "sidebarWidth" : "infoWidth", current.width);
+        }
         return null;
       });
     };
@@ -333,6 +346,19 @@ export default function App() {
     document.body.style.cursor = "col-resize";
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+  };
+
+  /**
+   * 双击分栏边框回到默认宽度。
+   *
+   * 拖窄了之后想拖回原样得靠眼神对齐，而默认值是有一个的；这是编辑器里常见的
+   * 那个手势（VS Code、开发者工具都是双击）。
+   */
+  const resetWidth = (panel: "sidebar" | "outline") => {
+    updateSetting(
+      panel === "sidebar" ? "sidebarWidth" : "infoWidth",
+      panel === "sidebar" ? defaultSettings.sidebarWidth : defaultSettings.infoWidth,
+    );
   };
 
   if (!settingsLoaded) {
@@ -344,19 +370,21 @@ export default function App() {
   }
 
   const sidebarVisible = isSidebarOpen ?? showSidebar;
-  const effectiveWidth = dragWidth ?? sidebarWidth;
+  const sidebarWidthNow = dragging?.panel === "sidebar" ? dragging.width : sidebarWidth;
+  const infoWidthNow = dragging?.panel === "outline" ? dragging.width : infoWidth;
 
   return (
     <div className="qj-root flex h-full overflow-hidden bg-background text-foreground">
       {sidebarVisible && (
         <>
-          <Sidebar width={effectiveWidth} />
+          <Sidebar width={sidebarWidthNow} />
           <div
             role="separator"
             aria-orientation="vertical"
             aria-label="调整侧边栏宽度"
-            className={cn("qj-resizer", dragWidth !== null && "qj-resizer--active")}
-            onMouseDown={startResize}
+            className={cn("qj-resizer", dragging?.panel === "sidebar" && "qj-resizer--active")}
+            onMouseDown={(event) => startResize(event, "sidebar", sidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX)}
+            onDoubleClick={() => resetWidth("sidebar")}
           />
         </>
       )}
@@ -414,9 +442,24 @@ export default function App() {
           </div>
 
           {showOutline && (
-            <aside className="qj-paper w-60 shrink-0 overflow-y-auto border-l border-border/80">
-              <Outline />
-            </aside>
+            <>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="调整大纲宽度"
+                className={cn("qj-resizer", dragging?.panel === "outline" && "qj-resizer--active")}
+                onMouseDown={(event) =>
+                  startResize(event, "outline", infoWidth, OUTLINE_MIN, OUTLINE_MAX)
+                }
+                onDoubleClick={() => resetWidth("outline")}
+              />
+              <aside
+                className="qj-paper shrink-0 overflow-y-auto border-l border-border/80"
+                style={{ width: infoWidthNow }}
+              >
+                <Outline />
+              </aside>
+            </>
           )}
         </div>
 

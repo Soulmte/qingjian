@@ -17,9 +17,9 @@
     "Microsoft YaHei", sans-serif;
   --qj-font-mono: "Cascadia Code", Consolas, "Courier New", monospace;
 
-  /* 布局常量 */
-  --qj-sidebar-w: 264px;
-  --qj-info-w: 288px;
+  /* 布局常量。两个分栏的宽度不在这里：它们由设置里的 sidebarWidth /
+     infoWidth 决定，而那两个值可以拖边框改，写死在这儿只会多一份不会生效
+     的声明。 */
   --qj-radius: 12px;
 }
 

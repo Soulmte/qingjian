@@ -1,5 +1,10 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 
+import { formatBytes } from "@/lib/bytes";
+
+// 这个模块原先自己放着一份，图片压缩也要用同一个说法，所以搬到了 lib/bytes。
+// 这里转出去，免得改动一行就要去动引用它的一串地方。
+export { formatBytes };
 export type { Update };
 
 /**
@@ -27,13 +32,6 @@ export function formatReleaseTime(value: string | null | undefined): string | nu
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
-}
-
-/** 下载进度用的字节显示。 */
-export function formatBytes(bytes: number): string {
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${bytes} B`;
 }
 
 /** 下载速度，形如 `1.4 MB/s`。 */

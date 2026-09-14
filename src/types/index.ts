@@ -180,6 +180,8 @@ export interface AppSettings {
   showSidebar: boolean;
   showOutline: boolean;
   sidebarWidth: number;
+  /** 右侧大纲 / 信息栏的宽度，可以拖分栏边框改。 */
+  infoWidth: number;
 
   /* 导出 */
   /** 另存为对话框里默认选中的格式。 */
