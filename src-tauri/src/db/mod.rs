@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use sqlx::migrate::{MigrateError, Migrator};
 use sqlx::sqlite::{
     SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions, SqliteSynchronous,
 };
@@ -32,6 +33,12 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 /// date. WAL keeps reads from blocking writes, which matters because note
 /// snapshots and searches run while the editor autosaves.
 pub async fn init_pool(app_data_dir: &Path) -> AppResult<SqlitePool> {
+    open_with(app_data_dir, &MIGRATOR).await
+}
+
+/// 打开连接池并跑一遍迁移。迁移集由调用方给，因为「库比程序新」那一次要用一套
+/// 宽松的（见 `open_ignoring_extra_migrations`）。
+async fn open_with(app_data_dir: &Path, migrator: &Migrator) -> AppResult<SqlitePool> {
     std::fs::create_dir_all(app_data_dir)?;
 
     let options = SqliteConnectOptions::new()
@@ -47,10 +54,11 @@ pub async fn init_pool(app_data_dir: &Path) -> AppResult<SqlitePool> {
         .connect_with(options)
         .await?;
 
-    if let Err(error) = MIGRATOR.run(&pool).await {
+    if let Err(error) = migrator.run(&pool).await {
         // 先把连接关干净再报错：调用方接下来会把坏掉的库改名挪走。池的析构是
-        // 后台异步做的，等不到它，而`quarantine` 里那个改名的重试就是为这一
-        // 类残留句柄准备的。
+        // 后台异步做的，等不到它，而 `quarantine` 里那个改名的重试就是为这一
+        // 类残留句柄准备的。不关的直接后果是改名撞上「另一个程序正在使用此文
+        // 件」（os error 32）——占用它的正是自己，0.1.8 就是这么起不来的。
         pool.close().await;
         return Err(error.into());
     }
@@ -58,8 +66,7 @@ pub async fn init_pool(app_data_dir: &Path) -> AppResult<SqlitePool> {
     Ok(pool)
 }
 
-/// Opens the database, moving a database sqlx cannot open aside and retrying
-/// once, returning a message describing what happened.
+/// Opens the database, opening a newer one as-is and moving a broken one aside.
 ///
 /// A failed migration or a corrupt file used to propagate out of `setup`, and
 /// because Tauri aborts the whole app on a `setup` error the window never
@@ -67,14 +74,44 @@ pub async fn init_pool(app_data_dir: &Path) -> AppResult<SqlitePool> {
 /// (the notes themselves are plain `.md` files on disk), so the honest recovery
 /// is to set the broken database aside and rebuild it, then say so.
 ///
+/// The one failure that is *not* corruption is a database written by a newer
+/// build: it is opened as-is (see `open_ignoring_extra_migrations`), because
+/// quarantining it would throw away settings and workspaces that cannot be
+/// rebuilt from `.md` files.
+///
 /// Returns the message the UI should show, or `None` when nothing went wrong.
 pub async fn init_pool_or_recover(
     app_data_dir: &Path,
 ) -> AppResult<(SqlitePool, Option<String>)> {
     match init_pool(app_data_dir).await {
         Ok(pool) => Ok((pool, None)),
+
+        // 库里有一条迁移是当前程序不认识的：这不是坏库，是这个程序比库旧。把它
+        // 搬走等于把设置、工作区、笔记索引一起丢掉——那三样都不在 .md 里，重建
+        // 不回来。所以放行：按老的那一套打开，多出来的表和列放着不用，同时叫
+        // 用户更新。
+        Err(AppError::Migration(MigrateError::VersionMissing(version))) => {
+            let pool = open_ignoring_extra_migrations(app_data_dir).await?;
+            Ok((
+                pool,
+                Some(format!(
+                    "这个数据库是更新版本的青简建的，当前这个青简比它旧（差着迁移 {version}）。\n\n\
+                     为了不丢掉设置和工作区，已按旧的那一套把它打开，笔记都在。\
+                     只是拿旧版本去写新库终究不是常事，建议尽快更新到最新版。"
+                )),
+            ))
+        }
+
         Err(first) => {
-            let backup = quarantine(app_data_dir)?;
+            // 搬不走就说清楚是搬不走。光报一句「另一个程序正在使用此文件」会让人
+            // 以为是自己开着青简，其实是改名这一步挡住的，而挡住的原因在 `first`
+            // 里——那句话不能丢。
+            let backup = quarantine(app_data_dir).map_err(|problem| {
+                AppError::Message(format!(
+                    "数据库无法打开（{first}）；想把它挪到一边留个备份时也失败了（{problem}）。"
+                ))
+            })?;
+
             let pool = init_pool(app_data_dir).await.map_err(|second| {
                 AppError::Message(format!(
                     "数据库无法打开：{first}。重建索引时再次失败：{second}"
@@ -90,6 +127,20 @@ pub async fn init_pool_or_recover(
             ))
         }
     }
+}
+
+/// 容忍「库里有当前程序不认识的迁移」再开一次。
+///
+/// sqlx 默认会因此直接拒绝启动（`MigrateError::VersionMissing`），它防的是「老程序把
+/// 新库写坏」。可青简的库是 .md 的索引加一点设置，把整库搬走的代价远大于按老一套打
+/// 开：新版本加的表和列当前版本根本不会去读。认识的那几条仍然逐条比校验和，宽松的
+/// 只是「多出来的那些」。
+async fn open_ignoring_extra_migrations(app_data_dir: &Path) -> AppResult<SqlitePool> {
+    // 不能直接改 MIGRATOR：它是 static，而 sqlx 也没给 Migrator 实现 Clone。
+    // `migrate!` 展开出来的是一个常量表达式，在局部再取一份就行。
+    let mut migrator: Migrator = sqlx::migrate!("./migrations");
+    migrator.set_ignore_missing(true);
+    open_with(app_data_dir, &migrator).await
 }
 
 /// Moves the database file (and its WAL companions) out of the way.
@@ -231,6 +282,75 @@ mod tests {
             .any(|entry| entry.file_name().to_string_lossy().contains("corrupt-"));
         assert!(!quarantined, "a healthy database was quarantined");
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 库比程序新的时候（被更新版本的青简迁过），不能把库搬走：设置、工作区、
+    /// 笔记索引都不在 .md 里，重建不回来。以前这种情况会一路炸到启动失败——用户
+    /// 看到的是「另一个程序正在使用此文件」，其实占用它的是青简自己。
+    #[tokio::test]
+    async fn database_from_a_newer_build_is_opened_not_quarantined() {
+        let dir = std::env::temp_dir().join(format!(
+            "qingjian-db-newer-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+
+        // 先建一个正常的库，再冒充「被更新的版本迁过」：塞一条当前程序不认识的迁移。
+        let (pool, notice) = init_pool_or_recover(&dir).await.expect("first open");
+        assert!(notice.is_none(), "clean start has nothing to report");
+        pool.close().await;
+
+        let pool = init_pool(&dir).await.expect("reopen");
+        sqlx::query(
+            "INSERT INTO _sqlx_migrations (version, description, success, checksum, execution_time) \
+             VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(9999_i64)
+        .bind("a migration from a newer build")
+        .bind(true)
+        .bind(vec![0_u8; 48])
+        .bind(0_i64)
+        .execute(&pool)
+        .await
+        .expect("plant a migration this build does not know");
+        pool.close().await;
+
+        // 严格那一套会拒绝启动——这正是要接住的错。
+        assert!(
+            matches!(init_pool(&dir).await, Err(AppError::Migration(_))),
+            "a newer database must make the strict migrator refuse"
+        );
+
+        let (pool, notice) = init_pool_or_recover(&dir)
+            .await
+            .expect("a newer database must still open");
+        let notice = notice.expect("opening a newer database has to be reported");
+        assert!(
+            notice.contains("9999"),
+            "the notice should name the migration: {notice}"
+        );
+
+        // 库没被动过：没被搬走，schema 也还在。
+        let quarantined = std::fs::read_dir(&dir)
+            .expect("list dir")
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains("corrupt-"))
+            .count();
+        assert_eq!(quarantined, 0, "a newer database must not be quarantined");
+
+        let tables: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'note'",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("the database is still usable");
+        assert_eq!(tables, 1, "the schema survived");
+
+        drop(pool);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
