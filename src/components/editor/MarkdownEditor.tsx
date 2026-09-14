@@ -30,6 +30,7 @@ import {
 } from "@/lib/editor/bridge";
 import { buildEditorMenu } from "@/lib/editor/editor-menu";
 import { focusModePlugin } from "@/lib/editor/focus-mode";
+import { sameDocument } from "@/lib/editor/same-document";
 import { normaliseTableBreaks } from "@/lib/editor/table-markdown";
 import { parseFrontMatter, withFrontMatter } from "@/lib/front-matter";
 import { EDITOR_PLACEHOLDER, editorLabels } from "@/lib/editor/locale";
@@ -136,8 +137,21 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
      * and write the user's file again, in our serialisation, moments after they
      * saved it in another editor. Nothing is lost by ignoring it: the store holds
      * that exact text already, and any real edit changes it.
+     *
+     * 不过「它刚才吃进去的文本」并不等于「它会发出来的文本」：Milkdown 发出的是
+     * 自己序列化之后的样子，`---` 回来是 `***`、表格两侧补过的空格被收掉。拿原文
+     * 当基准的话，第一次回显就会被当成用户的编辑推回 store——打开一篇笔记就把文件
+     * 改写了，还白留一版历史。判断交给 `awaitingBaseline` 与 `sameDocument`。
      */
     let lastMarkdown = initialContent;
+    /**
+     * 还没收下过编辑器自己的那份序列化结果。
+     *
+     * 第一份回显只按「是不是同一篇文档」来判：同一篇就收下当基准；不是同一篇
+     * （比如建好之后用户立刻敲了一下）就照常当编辑处理，一个字都不能丢。之后一律
+     * 走上面那行字符串比较。
+     */
+    let awaitingBaseline = true;
 
     const scroller = host.closest(".editor-scroll");
 
@@ -218,6 +232,18 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
         if (disposed) return;
+
+        if (awaitingBaseline) {
+          awaitingBaseline = false;
+          // 同一篇文档 → 这是编辑器把自己的文档重新序列化之后发回来的，不是
+          // 用户改的。收下当基准，不推回 store。
+          if (sameDocument(markdown, initialContent)) {
+            lastMarkdown = markdown;
+            return;
+          }
+          // 真的不同 → 那是编辑，落到下面走正常路径。
+        }
+
         if (markdown === lastMarkdown) return;
         lastMarkdown = markdown;
 
