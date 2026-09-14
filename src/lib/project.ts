@@ -12,22 +12,22 @@ export const PROJECT_NAME = "qingjian";
  * Gitee 镜像所在账号。
  *
  * 两侧账号名并不相同：GitHub 是 `Soulmte`，Gitee 是 `rain-drops`。
- * 镜像只用来在「下载太慢」时给一条手动出路，自动更新仍然只走 GitHub。
+ *
+ * Gitee 不只是备用：**自动更新先问它**（端点列表在 `tauri.conf.json` 的
+ * `plugins.updater` 里，Gitee 那条排在前），问不到才退到 GitHub。
  */
 export const GITEE_OWNER = "rain-drops";
 
 export const GITHUB_URL = `https://github.com/${PROJECT_OWNER}/${PROJECT_NAME}`;
 export const GITEE_URL = `https://gitee.com/${GITEE_OWNER}/${PROJECT_NAME}`;
 
-/** 检查更新用的仓库，`owner/repo`，走 GitHub Releases。 */
+/** 发布与更新用的主仓库，`owner/repo`。端点列表里 GitHub 是备选那一条。 */
 export const UPDATE_REPOSITORY = `${PROJECT_OWNER}/${PROJECT_NAME}`;
 
 /**
- * 某个版本在镜像（Gitee）上的发布页。
+ * 某个版本的发布页。
  *
- * 只在「下载太慢」时作为手动出路给出：GitHub 的安装包在国内经常只有几十 KB/s，
- * 而镜像那边是同一份包，下下来双击安装即可。自动更新仍然只走 GitHub——Tauri 的
- * 更新端点是构建期配置，运行时改不了，强行改写要自己重做一遍验签，不值得。
+ * 只在自动更新两次都失败时作为手动出路给出：同一份安装包，双击装上即可。
  */
 export function mirrorReleaseUrl(version: string): string {
   return `${GITEE_URL}/releases/tag/v${version}`;

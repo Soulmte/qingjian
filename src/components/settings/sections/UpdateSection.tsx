@@ -189,7 +189,7 @@ export function UpdateSection() {
       )}
 
       <p className="text-xs text-muted">
-        {`青简从 GitHub Releases 取更新，安装前会校验签名——只有用发布者私钥签过名的包才会被装上。`}
+        {`青简先问 Gitee，问不到再问 GitHub；无论从哪边下，安装前都会校验签名——只有用发布者私钥签过名的包才会被装上。`}
         {update && (
           <>
             {" "}
@@ -198,7 +198,7 @@ export function UpdateSection() {
               className="qj-text-btn"
               onClick={() => void api.openExternal(mirrorReleaseUrl(update.version))}
             >
-              下载很慢？从镜像手动下载
+              两边都慢？手动下载（Gitee）
             </button>
           </>
         )}

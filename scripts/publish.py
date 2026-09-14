@@ -24,10 +24,12 @@ git —— 那是几条能用眼睛逐行检查的命令，不值得藏在脚本
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -245,6 +247,28 @@ class GitHub:
 # --------------------------------------------------------------------------
 
 
+def mirror_latest_json(metadata: dict, repo: str, tag: str) -> dict:
+    """把 CI 生成的那份 latest.json 改成指向 Gitee。
+
+    更新器把端点按顺序试，取第一个读得到的 `latest.json`；而**下载地址在它里面**。
+    所以光把 Gitee 排到最前面还不够——那份 JSON 里的 url 必须指向 Gitee 上的安装
+    包，否则检查走了 Gitee、下载还是回 GitHub，白忙。
+
+    只改 url。版本、说明、签名全部照旧：签名盖的是安装包本身，跟它放在哪台服务器
+    无关，同一份包在两边都验得过。
+    """
+    mirrored = copy.deepcopy(metadata)
+    base = f"https://gitee.com/{repo}/releases/download/{tag}"
+
+    for platform in mirrored.get("platforms", {}).values():
+        url = platform.get("url", "")
+        if not url:
+            continue
+        platform["url"] = f"{base}/{url.rsplit('/', 1)[-1]}"
+
+    return mirrored
+
+
 class Gitee:
     host = "gitee.com"
     env_name = "GITEE_TOKEN"
@@ -379,6 +403,36 @@ class Gitee:
             raise SystemExit(f"上传 {name} 失败（{status}）：{text[:300]}")
         print(f"  已上传 {name}（{len(payload) / 1048576:.1f} MB）")
 
+    def publish_updates_pointer(self, repo: str, updates_tag: str, metadata: dict) -> None:
+        """刷新固定 tag 上的 latest.json——应用检查更新时先读的就是它。
+
+        它的地址必须永远有效、并且永远指向最新一版，所以单独占一个 tag：每次发版
+        把里面的 latest.json 换掉（删掉旧 Release 再建一个，附件跟着重传）。
+
+        中间有一瞬间会 404，那一刻检查会退到端点列表里的下一个（GitHub）——那是
+        设计好的兜底，不是意外。
+        """
+        if self.dry_run:
+            print(f"  [dry-run] 跳过刷新 {updates_tag} 指针")
+            return
+
+        existing = self.release(repo, updates_tag)
+        if existing:
+            self.delete_release(repo, existing["id"])
+
+        note = (
+            "应用检查更新时先读这里的 latest.json。每次发版由 scripts/publish.py 刷新，"
+            "不要手改：这个文件里的下载地址是指向 Gitee 的。"
+        )
+        created = self.create_release(repo, updates_tag, "更新指针", note)
+        if not created:
+            raise SystemExit(f"建不了 {updates_tag} 指针 Release")
+
+        staged = Path(tempfile.gettempdir()) / "qingjian-updates-latest.json"
+        staged.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.upload(repo, created["id"], staged, "latest.json")
+        print(f"  已刷新 {updates_tag} 指针（应用会先读它）")
+
 
 HOSTS = {"github": GitHub, "gitee": Gitee}
 
@@ -415,6 +469,20 @@ def main() -> int:
         "--recreate",
         action="store_true",
         help="已存在同 tag 的 Release 时先删掉重建（会连它的附件一起删，慎用）",
+    )
+    parser.add_argument(
+        "--latest-json",
+        metavar="PATH",
+        help=(
+            "CI 生成的那份 latest.json（本地路径或 GitHub Release 上取回的都行）。"
+            "给了它，Gitee 这边会把它改写成指向 Gitee 的下载地址，既挂到这次 Release "
+            "上，也刷新应用检查更新时先读的那个固定指针。"
+        ),
+    )
+    parser.add_argument(
+        "--updates-tag",
+        default="updates",
+        help="固定 tag：它的 latest.json 是应用检查更新时的首选端点（默认 updates）",
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -476,8 +544,44 @@ def main() -> int:
             raise SystemExit("拿不到 Release id，无法上传")
         client.upload(args.repo, release_id, path, name)
 
+    if args.latest_json:
+        publish_latest_mirror(client, args, release_id, already)
+
     print("  完成" if not args.dry_run else "  dry-run 结束，未发出任何请求")
     return 0
+
+
+def publish_latest_mirror(client, args, release_id: int, already: set[str]) -> None:
+    """把更新元数据也放到 Gitee 上。
+
+    分两处：一份挂到这次版本 Release（`/releases/download/v0.1.9/latest.json`，
+    版本页自描述），一份刷到固定 tag 的指针（应用真正先读的那个）。
+    """
+    if args.host != "gitee":
+        raise SystemExit("--latest-json 只在 gitee 上有意义；GitHub 的 latest.json 由 CI 生成")
+
+    source = Path(args.latest_json)
+    if not source.is_file():
+        raise SystemExit(f"latest.json 不存在：{source}")
+
+    try:
+        metadata = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as problem:
+        raise SystemExit(f"--latest-json 要的是 CI 生成的那份 JSON：{problem}") from problem
+    mirrored = mirror_latest_json(metadata, args.repo, args.tag)
+    for platform, info in mirrored.get("platforms", {}).items():
+        print(f"  {platform} 的下载地址改为：{info.get('url')}")
+
+    if "latest.json" in already:
+        print("  跳过 latest.json（这次 Release 上已有）")
+    elif args.dry_run:
+        print("  [dry-run] 跳过上传 latest.json")
+    else:
+        staged = Path(tempfile.gettempdir()) / "qingjian-version-latest.json"
+        staged.write_text(json.dumps(mirrored, ensure_ascii=False, indent=2), encoding="utf-8")
+        client.upload(args.repo, release_id, staged, "latest.json")
+
+    client.publish_updates_pointer(args.repo, args.updates_tag, mirrored)
 
 
 if __name__ == "__main__":

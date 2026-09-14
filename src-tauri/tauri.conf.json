@@ -59,6 +59,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
+        "https://gitee.com/rain-drops/qingjian/releases/download/updates/latest.json",
         "https://github.com/Soulmte/qingjian/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNDQzE5QUNBMTI2MzgzQUIKUldTcmcyTVN5cHJCUEkyS0NLSG1mcU9xSmRJek5yZ3RXOGNGV1hpVHM4SzFXNjZZNWc4cEVXOXoK",

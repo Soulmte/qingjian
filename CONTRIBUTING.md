@@ -92,13 +92,24 @@
 
 * **改完自动更新相关的东西，至少本地跑一次真实验证**（装个正式版、让它更新一次）。开发模式下更新器的行为和正式版不同，光看代码不算数。
 
-* **Gitee 只能手动发**，更新端点仍指向 GitHub，Gitee 只作镜像。注意它的账号名与 GitHub 不同（GitHub 是 `Soulmte`，Gitee 是 `rain-drops`）：
+* **自动更新先问 Gitee，问不到再问 GitHub。** 端点列表在 `tauri.conf.json` 的 `plugins.updater.endpoints`，**顺序就是优先级**（Tauri 按顺序试，取第一个读得到的）。第一条指向 Gitee 上一个叫 `updates` 的固定 tag，它只有一个附件 `latest.json`，每次发版由 `scripts/publish.py` 刷掉。
+
+  两点容易踩：
+
+  * **光排到前面没用。** 下载地址写在 `latest.json` 里，所以 Gitee 那份必须把 `platforms.*.url` 改成指向 Gitee 的安装包，否则检查走了 Gitee、下载还是回 GitHub。这件事 `--latest-json` 会做。
+  * **签名不用管两边不同。** 签名盖的是安装包本身，与它放在哪台服务器无关，同一份包在两边都验得过（发布脚本只改 url，版本、说明、签名全部照旧）。
+
+* 要用这套，Gitee 那边就得有那份 JSON：
 
   ```bash
-  python scripts/publish.py gitee --repo rain-drops/qingjian --tag v0.1.8 \
+  # 先把 CI 建好的包和 latest.json 取到本地，再发
+  python scripts/publish.py gitee --repo rain-drops/qingjian --tag v0.1.9 \
     --notes-file release-notes.md --create-repo \
+    --latest-json <CI 生成的 latest.json> \
     --asset "本地路径=ASCII 发布名"
   ```
+
+  它会：把安装包挂到版本 Release → 把改写过的 `latest.json` 也挂上去（版本页自描述）→ 刷新 `updates` 指针（应用先读的那个）。刷新指针时旧 Release 先删后建，**中间有一瞬间 404**，那一刻检查会退到端点列表的下一个（GitHub）——设计好的兜底。
 
   两点都是踩出来的：
 
