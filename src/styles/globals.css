@@ -352,6 +352,18 @@ html.dark .qj-accent-swatch {
   box-shadow: var(--qj-shadow);
 }
 
+/* 历史版本：左边一列版本、右边一栏渲染结果，所以要有固定高度——不然列表与预览
+   各自撑高，对话框会随内容跳。比设置弹窗再宽一点：预览是按纸面宽度排的。 */
+.modal__dialog.qj-history {
+  width: min(1080px, 94vw);
+  height: min(680px, 88vh);
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+  border-radius: var(--qj-radius);
+  box-shadow: var(--qj-shadow);
+}
+
 /* The export format list. The chosen row uses the same language as the settings
  * segmented control — a tinted groove rather than a filled pill. */
 .qj-format-option--active {

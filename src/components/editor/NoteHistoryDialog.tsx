@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import { api, errorMessage } from "@/lib/api";
 import { cn } from "@/lib/cn";
+import { parseMarkdown } from "@/lib/export/ir";
+import { exportStylePayload, resolveImageFile } from "@/lib/export/styles";
 import { formatRevisionTime } from "@/lib/time";
+import { useSettings } from "@/stores/settings";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
 import type { NoteRevision } from "@/types";
@@ -15,6 +18,11 @@ import type { NoteRevision } from "@/types";
  * 只列覆盖之前留下的旧稿：删除有系统回收站，外部改动有冲突提示，只有「改坏了
  * 还存了盘」这一步在 0.1.8 之前是不可逆的。
  *
+ * 预览走的是**导出那条渲染管线**（`parseMarkdown` → `renderExport`），不是另写
+ * 一个 Markdown 渲染器：这是全应用唯一一处把 Markdown 变成 HTML 的地方，再写一
+ * 份的话，两边的标题层级、列表编号、表格样式迟早会对不上，看历史时看到的就不再
+ * 是笔记本来的样子。图片也照导出那样按笔记所在的目录解析，所以历史里的图能显示。
+ *
  * 恢复走的是普通保存那条路，不做冲突检查——点「恢复」本身就是明确的覆盖决定；
  * 而后端在写之前会先给当前这一版记一条历史，所以恢复错了还能恢复回来。
  */
@@ -24,10 +32,13 @@ export function NoteHistoryDialog() {
   const restoreRevision = useWorkspace((state) => state.restoreRevision);
   const saveState = useWorkspace((state) => state.saveState);
   const notes = useWorkspace((state) => state.notes);
+  const workspaces = useWorkspace((state) => state.workspaces);
+  const settings = useSettings((state) => state.settings);
 
   const [revisions, setRevisions] = useState<NoteRevision[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [preview, setPreview] = useState("");
+  const [html, setHtml] = useState("");
+  const [rendering, setRendering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,7 +56,7 @@ export function NoteHistoryDialog() {
 
     let cancelled = false;
     setError(null);
-    setPreview("");
+    setHtml("");
     setSelectedId(null);
 
     void (async () => {
@@ -64,26 +75,50 @@ export function NoteHistoryDialog() {
     };
   }, [noteId, loadList]);
 
+  /**
+   * 选中那一版渲染成 HTML。
+   *
+   * 用导出那一套排版（字体、标题阶梯、代码底色都是用户自己调的），只把标题留空：
+   * 历史版本的第一行通常就是标题，再在上面加一条文档标题会重复。图片按笔记所在
+   * 目录解析，所以历史里的图也显示得出来。
+   */
   useEffect(() => {
     if (selectedId === null) {
-      setPreview("");
+      setHtml("");
       return;
     }
 
     let cancelled = false;
+    setRendering(true);
+
     void (async () => {
       try {
         const detail = await api.readNoteRevision(selectedId);
-        if (!cancelled) setPreview(detail.content);
+        if (cancelled) return;
+
+        const root = workspaces.find((item) => item.id === note?.workspaceId)?.rootPath ?? "";
+        const blocks = parseMarkdown(detail.content, {
+          resolveImageFile: (src) => resolveImageFile(src, note?.relPath ?? "", root),
+        });
+        const rendered = await api.renderExport({
+          blocks,
+          styles: { ...exportStylePayload(settings, ""), title: "" },
+        });
+        if (!cancelled) {
+          setHtml(rendered);
+          setError(null);
+        }
       } catch (problem) {
         if (!cancelled) setError(errorMessage(problem));
+      } finally {
+        if (!cancelled) setRendering(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [selectedId, note?.workspaceId, note?.relPath, workspaces, settings]);
 
   const restore = async () => {
     if (selectedId === null || noteId === null) return;
@@ -104,8 +139,8 @@ export function NoteHistoryDialog() {
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && setNoteId(null)}>
       <Modal.Container size="lg">
-        <Modal.Dialog className="qj-dialog" aria-label="历史版本">
-          <div className="flex items-center justify-between gap-3 border-b border-border/80 px-4 py-3">
+        <Modal.Dialog className="qj-history" aria-label="历史版本">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/80 px-4 py-3">
             <div className="min-w-0">
               <h2 className="text-sm font-medium">历史版本</h2>
               <p className="truncate text-xs text-muted">
@@ -125,7 +160,7 @@ export function NoteHistoryDialog() {
           </div>
 
           {revisions.length === 0 ? (
-            <div className="qj-empty px-4 py-10">
+            <div className="qj-empty min-h-0 flex-1 px-4 py-10">
               <History className="size-6" />
               <p className="text-xs">还没有历史版本</p>
               <p className="text-[11px] opacity-80">
@@ -134,7 +169,7 @@ export function NoteHistoryDialog() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1">
-              <ul className="w-64 shrink-0 overflow-y-auto border-r border-border/80 py-1">
+              <ul className="w-60 shrink-0 overflow-y-auto border-r border-border/80 py-1">
                 {revisions.map((revision) => {
                   const isSelected = revision.id === selectedId;
                   return (
@@ -165,17 +200,29 @@ export function NoteHistoryDialog() {
                 })}
               </ul>
 
-              <pre
-                className="min-h-0 flex-1 overflow-auto px-4 py-3 text-xs whitespace-pre-wrap"
-                style={{ fontFamily: "var(--qj-font-mono)" }}
-              >
-                {preview}
-              </pre>
+              <div className="relative min-h-0 flex-1 bg-white">
+                {html ? (
+                  <iframe
+                    title="历史版本预览"
+                    // No scripts, no same-origin: the renderer only produces markup,
+                    // and a preview has no business running anything.
+                    sandbox=""
+                    srcDoc={html}
+                    className="h-full w-full"
+                  />
+                ) : (
+                  <p className="p-4 text-xs text-muted">
+                    {rendering ? "正在渲染…" : "选一版看看"}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
           {error && (
-            <p className="border-t border-border/80 px-4 py-2 text-xs text-danger">{error}</p>
+            <p className="shrink-0 border-t border-border/80 px-4 py-2 text-xs text-danger">
+              {error}
+            </p>
           )}
         </Modal.Dialog>
       </Modal.Container>
