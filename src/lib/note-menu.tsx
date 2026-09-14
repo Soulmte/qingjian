@@ -4,6 +4,7 @@ import {
   FolderOpen,
   FolderPlus,
   Heading,
+  History,
   Link,
   PencilLine,
   Trash2,
@@ -83,6 +84,17 @@ export function buildNoteMenu(note: Note, inTree = false): ContextMenuItem[] {
       run: () => {
         useWorkspace.getState().selectNote(note.id);
         useUi.getState().setRenamingNoteId(note.id);
+      },
+    },
+    {
+      id: "note.history",
+      label: "历史版本…",
+      icon: <History />,
+      run: () => {
+        // 历史是贴在某一篇笔记上的，所以先把它打开——否则看到的列表与屏幕上
+        // 这篇对不上，而「恢复」还会写进另一篇。
+        useWorkspace.getState().selectNote(note.id);
+        useUi.getState().setHistoryNoteId(note.id);
       },
     },
     {

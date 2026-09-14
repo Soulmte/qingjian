@@ -41,6 +41,30 @@ pub struct NoteDetail {
     pub hash: String,
 }
 
+/// 一条历史版本，**不含正文**。
+///
+/// 列表里一次可能有几十条，而每条都带着整篇正文的话，一篇长笔记的列表就是几
+/// 兆数据——只为了显示几个时间戳。要看内容再单独取那一条。
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteRevision {
+    pub id: i64,
+    pub note_id: i64,
+    pub created_at: i64,
+    /// 字数（字符数），用来在列表里区分「改了一行」和「整篇重写」。
+    pub size: i64,
+    /// 正文里第一行非空文字，截断过的，让列表能认出是哪一版。
+    pub preview: String,
+}
+
+/// 一条带正文的历史版本。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteRevisionDetail {
+    pub revision: NoteRevision,
+    pub content: String,
+}
+
 /// What a save did.
 ///
 /// A conflict is not an error: nothing was written, and the caller decides

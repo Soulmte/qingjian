@@ -4,9 +4,26 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { cn } from "@/lib/cn";
 import { useContextMenu, type ContextMenuEntry, type ContextMenuItem } from "@/lib/context-menu";
 import { buildFolderMenu, buildNoteMenu } from "@/lib/note-menu";
+import { useVirtualList } from "@/lib/use-virtual-list";
+import { flattenTree } from "@/lib/virtual-list";
 import { useUi } from "@/stores/ui";
 import { useWorkspace } from "@/stores/workspace";
 import type { Note, SearchHit } from "@/types";
+
+/**
+ * 行高写死是虚拟化的前提：知道行号就能算出像素位置，不必先渲染再量。
+ *
+ * 换行高度的代价是长文件名会被截断——本来就是 `truncate`，没有损失。
+ */
+const ROW_HEIGHT = 32;
+/**
+ * 列表上下左右的内边距。
+ *
+ * 绝对定位的子元素不吃父级的 padding（定位的参照物是 padding box），所以这些
+ * 留白得自己算进坐标，否则行会顶到边上。
+ */
+const PAD_Y = 4;
+const PAD_X = 6;
 
 interface TreeEntry {
   name: string;
@@ -128,9 +145,11 @@ function collectDirectories(entries: TreeEntry[]): string[] {
 interface RowProps {
   entry: TreeEntry;
   depth: number;
-  collapsed: ReadonlySet<string>;
-  onToggle: (path: string) => void;
+  isCollapsed: boolean;
+  /** 行在内容里的绝对位置，由虚拟列表算好。 */
+  top: number;
   activeNoteId: number | null;
+  onToggle: (path: string) => void;
   onSelect: (id: number) => void;
   onRename: (id: number) => void;
   onMenu: (entry: TreeEntry, event: MouseEvent) => void;
@@ -141,15 +160,15 @@ interface RowProps {
 function TreeRow({
   entry,
   depth,
-  collapsed,
-  onToggle,
+  isCollapsed,
+  top,
   activeNoteId,
+  onToggle,
   onSelect,
   onRename,
   onMenu,
   snippets,
 }: RowProps) {
-  const isCollapsed = collapsed.has(entry.path);
   const isActive = entry.note !== null && entry.note.id === activeNoteId;
   // The tree shows the folder a match sits in; the matched text itself only fits
   // in a tooltip, which is still far better than dropping it.
@@ -158,14 +177,17 @@ function TreeRow({
   return (
     // The menu is bound to the row rather than the label so the rename button on
     // the right belongs to it too; the tree's background menu is on the parent.
+    //
+    // 行是绝对定位的：它不吃父级的 padding，所以四边留白自己算。
     <li
-      className="group/row relative"
+      className="group/row absolute"
+      style={{ top, height: ROW_HEIGHT, left: PAD_X, right: PAD_X }}
       onContextMenu={(event) => onMenu(entry, event)}
     >
       <button
         type="button"
         className={cn(
-          "relative flex w-full items-center gap-1.5 rounded-md py-1.5 pr-8 text-left text-sm transition-colors",
+          "relative flex h-full w-full items-center gap-1.5 rounded-md pr-8 text-left text-sm transition-colors",
           isActive ? "font-medium" : "text-foreground/80 hover:bg-default/60",
         )}
         style={{
@@ -216,25 +238,6 @@ function TreeRow({
         >
           <PencilLine className="size-4" />
         </button>
-      )}
-
-      {entry.isDir && !isCollapsed && entry.children.length > 0 && (
-        <ul>
-          {entry.children.map((child) => (
-            <TreeRow
-              key={child.path}
-              entry={child}
-              depth={depth + 1}
-              collapsed={collapsed}
-              onToggle={onToggle}
-              activeNoteId={activeNoteId}
-              onSelect={onSelect}
-              onRename={onRename}
-              onMenu={onMenu}
-              snippets={snippets}
-            />
-          ))}
-        </ul>
       )}
     </li>
   );
@@ -304,6 +307,18 @@ export function FileTree() {
     });
   };
 
+  /**
+   * 树先摊平再渲染。
+   *
+   * 摊平之后行号就是像素位置，折叠又已经把看不见的行从数组里去掉了——「只渲染
+   * 看得见的那几十行」就只需要对着这个数组取一段，不必在递归里传视口信息。
+   */
+  const rows = useMemo(
+    () => flattenTree(tree, effectiveCollapsed),
+    [tree, effectiveCollapsed],
+  );
+  const { ref: scrollRef, range } = useVirtualList(rows.length, ROW_HEIGHT, PAD_Y);
+
   const openRowMenu = (entry: TreeEntry, event: MouseEvent) => {
     event.preventDefault();
     // Otherwise the tree's own menu would open over this one.
@@ -351,9 +366,8 @@ export function FileTree() {
   };
 
   return (
-    // `min-h-full` so the empty space under the rows is still a right-click target.
-    <div className="flex min-h-full flex-col" onContextMenu={openBackgroundMenu}>
-      {tree.length === 0 ? (
+    <div className="flex h-full flex-col" onContextMenu={openBackgroundMenu}>
+      {rows.length === 0 ? (
         filtering ? (
           <div className="qj-empty">
             <SearchX className="size-6" />
@@ -368,22 +382,30 @@ export function FileTree() {
           </div>
         )
       ) : (
-        <ul className="px-1.5 py-1">
-          {tree.map((entry) => (
-            <TreeRow
-              key={entry.path}
-              entry={entry}
-              depth={0}
-              collapsed={effectiveCollapsed}
-              onToggle={toggle}
-              activeNoteId={activeNoteId}
-              onSelect={(id) => void selectNote(id)}
-              onRename={setRenamingNoteId}
-              onMenu={openRowMenu}
-              snippets={snippets}
-            />
-          ))}
-        </ul>
+        // 滚动容器归文件树自己拿：虚拟化要知道滚到哪里了，而高度可能是被一个
+        // 抽屉式的侧栏动画改的，从外面传引用进来只会多一层麻烦。
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+          {/* 占位盒子把滚动条的长度堆出来，里面只放当前这一段行。 */}
+          <div className="relative" style={{ height: range.totalHeight }}>
+            <ul>
+              {rows.slice(range.start, range.end).map((row, index) => (
+                <TreeRow
+                  key={row.node.path}
+                  entry={row.node}
+                  depth={row.depth}
+                  isCollapsed={effectiveCollapsed.has(row.node.path)}
+                  top={range.offsetY + index * ROW_HEIGHT}
+                  activeNoteId={activeNoteId}
+                  onToggle={toggle}
+                  onSelect={(id) => void selectNote(id)}
+                  onRename={setRenamingNoteId}
+                  onMenu={openRowMenu}
+                  snippets={snippets}
+                />
+              ))}
+            </ul>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -22,6 +22,12 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+# 第二次双击 .md 时，系统会再拉起一个进程。这个插件让第二个进程把命令行交给第
+# 一个进程然后自己退出，而不是开出第二个窗口、第二份数据库连接。
+tauri-plugin-single-instance = "2"
+# 记住窗口的大小与位置，并在下次启动时还原；顺带负责「别把窗口还原到已经拔掉
+# 的显示器上」这类显示器拓扑变化。
+tauri-plugin-window-state = "2"
 # Image hosting talks to the Git provider from Rust, so an access token never
 # reaches the webview. ureq is tiny and resolves entirely offline here.
 ureq = { version = "3", features = ["json"] }

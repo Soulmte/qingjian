@@ -9,16 +9,55 @@ mod search;
 mod services;
 mod state;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 use state::AppState;
 
+/// 第二个青简把「要打开的文件」交给第一个时用的事件名。
+///
+/// 前端 `App.tsx` 监听同名事件，收到后调 `take_open_file` 把路径取走。
+const OPEN_FILE_EVENT: &str = "open-file-request";
+
+/// 又一个青简被拉起来时，把它的目标文件转交给已经在跑的这一份。
+///
+/// 不做这件事的后果不只是「多开一个窗口」：两个进程各持一个数据库连接，同一
+/// 篇笔记会被两边分别写回，后写的盖掉先写的。
+fn hand_over_second_launch(app: &tauri::AppHandle, argv: Vec<String>) {
+    // 和普通启动一样，argv[0] 是 exe 自己的路径，要跳过。
+    let requested = cli::markdown_path_in_args(argv.into_iter().skip(1));
+    let has_file = requested.is_some();
+
+    if let Some(path) = requested {
+        // 先存进状态再喊人：冷启动时第二个进程可能比第一个的前端跑得还快，
+        // 那时事件没人接，路径至少还在状态里等它来取。
+        if let Some(state) = app.try_state::<AppState>() {
+            state.remember_open_request(Some(path));
+        }
+    }
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+
+    if has_file {
+        let _ = app.emit(OPEN_FILE_EVENT, ());
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 必须排在最前面：这个插件要在窗口建起来之前接管命令行，晚了就来不及
+        // 阻止第二份进程往下走。
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            hand_over_second_launch(app, argv);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // 窗口的大小、位置、最大化状态：退出时写下，下次启动时还原。
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         // 自动更新：端点与公钥在 tauri.conf.json 的 plugins.updater 里
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -89,6 +128,9 @@ pub fn run() {
             commands::note::rename_note,
             commands::note::delete_note,
             commands::note::search_notes,
+            commands::note::list_note_revisions,
+            commands::note::read_note_revision,
+            commands::note::restore_note_revision,
             commands::asset::save_image,
             commands::asset::fetch_image_source,
             commands::file::export_text,

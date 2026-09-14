@@ -44,6 +44,28 @@ export interface SearchHit {
   snippet: string;
 }
 
+/**
+ * 一条历史版本，**不带正文**。
+ *
+ * 列表一次可能有几十条，每条都带着整篇正文就只是为了显示几个时间戳——一篇长
+ * 笔记的列表会是几兆数据。要看内容再单独取那一条。
+ */
+export interface NoteRevision {
+  id: number;
+  noteId: number;
+  /** Unix 秒。 */
+  createdAt: number;
+  /** 字符数，用来分辨「改了一行」和「整篇重写」。 */
+  size: number;
+  /** 正文里第一行非空文字（去过 Markdown 标记、截断过）。 */
+  preview: string;
+}
+
+export interface NoteRevisionDetail {
+  revision: NoteRevision;
+  content: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Settings                                                                    */
 /* -------------------------------------------------------------------------- */
@@ -130,6 +152,12 @@ export interface AppSettings {
   imageDir: string;
   imageAutoInsert: boolean;
   imageMaxWidth: number;
+  /** 存下来之前是否先缩尺寸、换格式。见 `lib/image-compress.ts`。 */
+  imageCompress: boolean;
+  /** 压缩时的长边上限，像素。 */
+  imageMaxEdge: number;
+  /** 压缩成 JPEG 时的质量，1–100。 */
+  imageQuality: number;
   /** 本地保存，还是上传到 Git 图床。 */
   imageUploadMode: ImageUploadMode;
   gitProvider: GitProvider;

@@ -18,6 +18,7 @@ import {
   type ClipboardImagePlan,
 } from "@/lib/clipboard-image";
 import { alignPlugin, alignedHeadingSchema, alignedParagraphSchema, remarkBlockAlignPlugin } from "@/lib/editor/align-plugin";
+import { canvasCodec, compressImage } from "@/lib/image-compress";
 import { alignmentForUi } from "@/lib/editor/align-selection";
 import {
   consumePlainPaste,
@@ -288,17 +289,26 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
 
     /** Writes the image into the workspace and optionally references it. */
     const acceptImage = async (plan: ClipboardImagePlan) => {
-      const { imageAutoInsert } = useSettings.getState().settings;
+      const { imageAutoInsert, imageCompress, imageMaxEdge, imageQuality } =
+        useSettings.getState().settings;
 
       try {
         const resolved = await resolveClipboardImage(plan, api.fetchImageSource);
+        // 瘦身在存下去之前，而不是之后：文件一旦落盘就得连改带删才能收回来。
+        // 压不动（格式碰不得、解不开、反而更大）时它会原样还回来。
+        const prepared = await compressImage(
+          resolved,
+          { enabled: imageCompress, maxEdge: imageMaxEdge, quality: imageQuality },
+          canvasCodec(),
+        );
         const hint =
           plan.kind === "file"
             ? plan.file.name
             : plan.kind === "source"
               ? sourceHint(plan.source)
               : undefined;
-        const stored = await storeImage(imageFileName(resolved.mime, hint), resolved.bytes);
+        // 文件名跟着**压完**的格式走：PNG 转成 JPEG 之后扩展名必须跟着变。
+        const stored = await storeImage(imageFileName(prepared.mime, hint), prepared.bytes);
 
         if (imageAutoInsert) {
           crepe.editor.action(insert(stored.markdown));

@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Note,
   NoteDetail,
+  NoteRevision,
+  NoteRevisionDetail,
   SaveOutcome,
   SearchHit,
   Workspace,
@@ -72,6 +74,18 @@ export const api = {
   deleteNote: (id: number) => invoke<void>("delete_note", { id }),
   searchNotes: (workspaceId: number | null, query: string) =>
     invoke<SearchHit[]>("search_notes", { workspaceId, query }),
+
+  // 历史版本
+  listNoteRevisions: (noteId: number) =>
+    invoke<NoteRevision[]>("list_note_revisions", { noteId }),
+  readNoteRevision: (revisionId: number) =>
+    invoke<NoteRevisionDetail>("read_note_revision", { revisionId }),
+  /**
+   * 把一版写回去。这是一次**不检查冲突**的覆盖：点「恢复」本身就是明确的覆盖
+   * 决定，后端会在写之前先给当前这一版记一条历史，所以恢复错了还能再恢复回来。
+   */
+  restoreNoteRevision: (revisionId: number) =>
+    invoke<SaveOutcome>("restore_note_revision", { revisionId }),
 
   // Assets
   saveImage: (workspaceId: number, dir: string, fileName: string, data: number[]) =>

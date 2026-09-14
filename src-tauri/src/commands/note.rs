@@ -4,11 +4,16 @@ use sqlx::{Row, SqlitePool};
 use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{Note, NoteDetail, SaveOutcome, SearchHit};
+use crate::models::{Note, NoteDetail, NoteRevision, NoteRevisionDetail, SaveOutcome, SearchHit};
 use crate::repo;
 use crate::search;
 use crate::services;
 use crate::state::AppState;
+
+/// 每篇笔记保留多少个历史版本。
+///
+/// 开自动保存时一天就能攒出几千版，全文副本不设上限迟早会把库撑爆。
+const REVISION_KEEP: i64 = 50;
 
 /// Characters shown around a search hit in the results list.
 const SNIPPET_CHARS: usize = 90;
@@ -86,6 +91,18 @@ pub async fn save_note_impl(
         }
     }
 
+    // 覆盖之前先留一份旧稿。这是全应用唯一不可逆的一步：删除有回收站，外部改动
+    // 有冲突提示，只有「改坏了还存了盘」没救。
+    let previous = if path.exists() {
+        // 读不出来（权限、编码）就不记，但绝不能因此拦下保存。
+        services::read_text(&path).ok()
+    } else {
+        None
+    };
+    if let Some(previous) = previous.as_deref() {
+        snapshot_revision(pool, id, previous, content).await?;
+    }
+
     // The editor always hands back LF, so a file that arrived with Windows
     // endings has to be converted back: otherwise a one-word edit rewrites every
     // line break in the file and shows up as a whole-file diff.
@@ -117,6 +134,61 @@ pub async fn save_note_impl(
         note: repo::fetch_note(pool, id).await?,
         hash,
     })
+}
+
+/// 把即将被覆盖的那一版记进历史。
+///
+/// 两种情况不记：
+///
+/// - **正文没变。** 关掉自动保存时不会走到这里，开着的时候每几百毫秒就会保存
+///   一次，而那些保存大多发生在「正文没动、只是光标动了」之后。
+/// - **与上一条历史完全相同。** 来回改又改回去的时候会出现：最新那条已经是这
+///   个内容了，再记一条只是把列表占满。
+///
+/// 比较一律用 `hash_content_lf`，因为 `previous` 是磁盘上的原文（可能是 CRLF），
+/// 而 `incoming` 是编辑器交回来的（一定是 LF）——直接比字符串会把每个 CRLF 文件
+/// 的每次保存都当成新内容。
+async fn snapshot_revision(
+    pool: &SqlitePool,
+    note_id: i64,
+    previous: &str,
+    incoming: &str,
+) -> AppResult<()> {
+    let hash = services::hash_content_lf(previous);
+    if hash == services::hash_content_lf(incoming) {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await?;
+    if repo::latest_revision_hash(&mut *tx, note_id).await?.as_deref() == Some(hash.as_str()) {
+        return Ok(());
+    }
+
+    repo::insert_revision(&mut *tx, note_id, previous, &hash).await?;
+    repo::prune_revisions(&mut *tx, note_id, REVISION_KEEP).await?;
+    tx.commit().await?;
+
+    Ok(())
+}
+
+/// 一篇笔记的历史版本，新的在前。
+pub async fn list_revisions_impl(pool: &SqlitePool, note_id: i64) -> AppResult<Vec<NoteRevision>> {
+    repo::list_revisions(pool, note_id).await
+}
+
+/// 取一版来看，`restore` 之前要先给用户看过。
+pub async fn read_revision_impl(pool: &SqlitePool, revision_id: i64) -> AppResult<NoteRevisionDetail> {
+    repo::fetch_revision(pool, revision_id).await
+}
+
+/// 把一版写回去。
+///
+/// 走的是普通保存那条路，只是不做冲突检查：点「恢复」本身就是一次明确的覆盖
+/// 决定（和冲突横幅里的「用我的版本覆盖」同一个意思）。好处是恢复之前会先自动
+/// 记下当前这一版，所以「恢复错了」可以再恢复回来，而不用为了这个另写一段。
+pub async fn restore_revision_impl(pool: &SqlitePool, revision_id: i64) -> AppResult<SaveOutcome> {
+    let revision = repo::fetch_revision(pool, revision_id).await?;
+    save_note_impl(pool, revision.revision.note_id, &revision.content, None).await
 }
 
 /// Creates a new Markdown file inside the workspace and returns its note row.
@@ -330,6 +402,30 @@ pub async fn search_notes(
     query: String,
 ) -> AppResult<Vec<SearchHit>> {
     search_notes_impl(&state.pool, workspace_id, &query).await
+}
+
+#[tauri::command]
+pub async fn list_note_revisions(
+    state: State<'_, AppState>,
+    note_id: i64,
+) -> AppResult<Vec<NoteRevision>> {
+    list_revisions_impl(&state.pool, note_id).await
+}
+
+#[tauri::command]
+pub async fn read_note_revision(
+    state: State<'_, AppState>,
+    revision_id: i64,
+) -> AppResult<NoteRevisionDetail> {
+    read_revision_impl(&state.pool, revision_id).await
+}
+
+#[tauri::command]
+pub async fn restore_note_revision(
+    state: State<'_, AppState>,
+    revision_id: i64,
+) -> AppResult<SaveOutcome> {
+    restore_revision_impl(&state.pool, revision_id).await
 }
 
 /* -------------------------------------------------------------------------- */
@@ -590,5 +686,151 @@ mod tests {
             error.to_string().contains("越界") || error.to_string().contains("非法"),
             "unexpected error: {error}"
         );
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* 历史版本                                                                */
+    /* ---------------------------------------------------------------------- */
+
+    /// 一个只有一个笔记的工作区，返回（工作区目录、库、笔记 id）。
+    async fn note_with_history() -> (TempDir, SqlitePool, i64) {
+        let workspace_dir = TempDir::new("history-workspace");
+        let data_dir = TempDir::new("history-data");
+        let pool = db::init_pool(data_dir.path()).await.expect("init pool");
+
+        std::fs::write(
+            workspace_dir.path().join("journal.md"),
+            "# 第一版\n\n从头开始。\n",
+        )
+        .expect("seed note");
+
+        let workspace_id: i64 = sqlx::query_scalar(
+            "INSERT INTO workspace (name, root_path) VALUES (?, ?) RETURNING id",
+        )
+        .bind("历史测试")
+        .bind(workspace_dir.path().to_string_lossy().to_string())
+        .fetch_one(&pool)
+        .await
+        .expect("insert workspace");
+
+        sync(&pool, workspace_id).await.expect("sync workspace");
+        let notes = repo::list_notes(&pool, workspace_id).await.expect("list notes");
+
+        (workspace_dir, pool, notes[0].id)
+    }
+
+    #[test]
+    fn preview_strips_the_markdown_marker_and_truncates() {
+        assert_eq!(repo::preview_of("\n\n## 标题\n正文"), "标题");
+        assert_eq!(repo::preview_of("- 列表项"), "列表项");
+        assert_eq!(repo::preview_of("   \n  \n"), "");
+
+        let long = "字".repeat(100);
+        let preview = repo::preview_of(&long);
+        assert_eq!(preview.chars().count(), 61, "60 个字加一个省略号");
+        assert!(preview.ends_with('…'));
+    }
+
+    #[tokio::test]
+    async fn a_save_keeps_the_body_it_replaced() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        save_note_impl(&pool, id, "# 第二版\n\n改过的内容。\n", None)
+            .await
+            .expect("save");
+
+        let revisions = list_revisions_impl(&pool, id).await.expect("list revisions");
+        assert_eq!(revisions.len(), 1, "上一版应该被留下来了");
+        assert_eq!(revisions[0].preview, "第一版");
+
+        let detail = read_revision_impl(&pool, revisions[0].id).await.expect("read");
+        assert!(detail.content.contains("从头开始。"));
+        assert_eq!(detail.revision.note_id, id);
+    }
+
+    #[tokio::test]
+    async fn saving_the_same_text_records_nothing() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        // 自动保存每几百毫秒就会调一次，而绝大多数调用发生在正文没变之后。
+        save_note_impl(&pool, id, "# 第一版\n\n从头开始。\n", None)
+            .await
+            .expect("save");
+
+        assert!(list_revisions_impl(&pool, id).await.expect("list").is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_windows_line_ending_file_is_not_a_change() {
+        let (dir, pool, id) = note_with_history().await;
+
+        // 磁盘上是 CRLF，编辑器交回来的一律是 LF。直接比字符串的话，每个 CRLF
+        // 文件的每次保存都会被当成新内容，历史会莫名其妙地涨。
+        std::fs::write(
+            dir.path().join("journal.md"),
+            "# 第一版\r\n\r\n从头开始。\r\n",
+        )
+        .expect("rewrite with CRLF");
+
+        save_note_impl(&pool, id, "# 第一版\n\n从头开始。\n", None)
+            .await
+            .expect("save");
+
+        assert!(list_revisions_impl(&pool, id).await.expect("list").is_empty());
+    }
+
+    #[tokio::test]
+    async fn restoring_puts_the_body_back_and_keeps_what_it_replaced() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        save_note_impl(&pool, id, "# 第二版\n\n改坏了。\n", None)
+            .await
+            .expect("save");
+        let revisions = list_revisions_impl(&pool, id).await.expect("list");
+
+        restore_revision_impl(&pool, revisions[0].id)
+            .await
+            .expect("restore");
+
+        let restored = read_note_impl(&pool, id).await.expect("read note");
+        assert!(restored.content.contains("从头开始。"));
+
+        // 恢复本身也是一次覆盖，所以刚才那版进历史了——「恢复错了」还能再恢复
+        // 回来，而不用为了这个另写一条路径。
+        let after = list_revisions_impl(&pool, id).await.expect("list again");
+        assert_eq!(after.len(), 2);
+        let newest = read_revision_impl(&pool, after[0].id).await.expect("read");
+        assert!(newest.content.contains("改坏了。"));
+    }
+
+    #[tokio::test]
+    async fn history_is_capped() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        for index in 0..REVISION_KEEP + 5 {
+            save_note_impl(&pool, id, &format!("# 第 {index} 版\n"), None)
+                .await
+                .expect("save");
+        }
+
+        let revisions = list_revisions_impl(&pool, id).await.expect("list");
+        assert_eq!(revisions.len() as i64, REVISION_KEEP);
+
+        // 留下的应该是最新的那一段，而不是最早的。
+        let newest = read_revision_impl(&pool, revisions[0].id).await.expect("read");
+        assert!(newest.content.contains(&format!("第 {} 版", REVISION_KEEP + 3)));
+    }
+
+    #[tokio::test]
+    async fn history_survives_a_soft_delete() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        save_note_impl(&pool, id, "# 第二版\n", None).await.expect("save");
+        delete_note_impl(&pool, id).await.expect("delete");
+
+        // 删除只是把 note 标记掉，而行还在——所以历史也还在。等文件被重新加回
+        // 工作区、笔记行复活时，历史不会凭空少一截。
+        let revisions = list_revisions_impl(&pool, id).await.expect("list");
+        assert_eq!(revisions.len(), 1);
     }
 }

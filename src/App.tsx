@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
@@ -5,6 +6,7 @@ import { useEffect, useState } from "react";
 import { EditorPane } from "@/components/editor/EditorPane";
 import { ExportDialog } from "@/components/editor/ExportDialog";
 import { FrontMatterDialog } from "@/components/editor/FrontMatterDialog";
+import { NoteHistoryDialog } from "@/components/editor/NoteHistoryDialog";
 import { StatusBar } from "@/components/editor/StatusBar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -128,6 +130,37 @@ export default function App() {
       }
     })();
   }, [loadSettings, initWorkspace]);
+
+  /**
+   * 青简已经在跑的时候又去双击一个 `.md`。
+   *
+   * 那一份进程由 `tauri-plugin-single-instance` 直接劝退，命令行交给这里的
+   * 主进程（见 `lib.rs` 的 `hand_over_second_launch`），主进程再发一个事件
+   * 让我们去取。取的路径和开机时那次是同一段逻辑，不开第二个窗口。
+   */
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let disposed = false;
+
+    void listen("open-file-request", async () => {
+      const requested = await api.takeOpenFile().catch(() => null);
+      if (requested) await openPathFromDisk(requested);
+    })
+      .then((unlisten) => {
+        // 监听是在事件发出去之前就绪，还是之后，取决于两边谁先跑完，所以等到
+        // 组件已经卸下来时得把迟到的那个取消掉，否则会泄漏。
+        if (disposed) unlisten();
+        else stop = unlisten;
+      })
+      .catch(() => {
+        // 事件通道不可用只意味着「转交」少一条路，开机那次打开不受影响。
+      });
+
+    return () => {
+      disposed = true;
+      stop?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (settingsLoaded && isSidebarOpen === null) setSidebarOpen(showSidebar);
@@ -397,6 +430,7 @@ export default function App() {
       <ContextMenu />
       <ExportDialog />
       <FrontMatterDialog />
+      <NoteHistoryDialog />
 
       {/* 查到新版本时弹出来。后台检查同样是走这里，只是不阻塞启动。 */}
       {pendingUpdate && (

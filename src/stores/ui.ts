@@ -46,6 +46,8 @@ interface UiState {
   isFrontMatterOpen: boolean;
   /** 跳转到标题 / 行。 */
   isGoToOpen: boolean;
+  /** 要看历史版本的笔记；`null` 时对话框不显示。 */
+  historyNoteId: number | null;
   /** Note awaiting delete confirmation; `null` when no dialog is pending. */
   pendingDeleteNoteId: number | null;
   /** Note being renamed; `null` when no dialog is pending. */
@@ -84,6 +86,7 @@ interface UiState {
   setExportOpen: (open: boolean) => void;
   setFrontMatterOpen: (open: boolean) => void;
   setGoToOpen: (open: boolean) => void;
+  setHistoryNoteId: (id: number | null) => void;
   setPendingDeleteNoteId: (id: number | null) => void;
   setRenamingNoteId: (id: number | null) => void;
   setRenamingFolder: (path: string | null) => void;
@@ -109,6 +112,7 @@ export const useUi = create<UiState>((set, get) => ({
   isExportOpen: false,
   isFrontMatterOpen: false,
   isGoToOpen: false,
+  historyNoteId: null,
   pendingDeleteNoteId: null,
   renamingNoteId: null,
   renamingFolder: null,
@@ -142,6 +146,7 @@ export const useUi = create<UiState>((set, get) => ({
   setExportOpen: (isExportOpen) => set({ isExportOpen }),
   setFrontMatterOpen: (isFrontMatterOpen) => set({ isFrontMatterOpen }),
   setGoToOpen: (isGoToOpen) => set({ isGoToOpen }),
+  setHistoryNoteId: (historyNoteId) => set({ historyNoteId }),
   setPendingDeleteNoteId: (pendingDeleteNoteId) => set({ pendingDeleteNoteId }),
   setRenamingNoteId: (renamingNoteId) => set({ renamingNoteId }),
   setRenamingFolder: (renamingFolder) => set({ renamingFolder }),

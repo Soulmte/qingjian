@@ -66,6 +66,13 @@ interface WorkspaceState {
 
   /** Re-reads the open note from disk, discarding the buffer. */
   reloadFromDisk: () => Promise<void>;
+  /**
+   * 把某一版历史写回去。
+   *
+   * 这是一次**不检查冲突**的覆盖（用户点的就是「就要这一版」），而后端在写之前
+   * 会先给当前这一版记一条历史，所以恢复错了还能再恢复回来。
+   */
+  restoreRevision: (revisionId: number) => Promise<void>;
   /** Writes the buffer over the version that arrived from outside. */
   overwriteFromDisk: () => Promise<void>;
   /**
@@ -384,6 +391,34 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         diskHash: null,
         saveState: "idle",
       });
+    },
+
+    /**
+     * 把某一版历史写回去。
+     *
+     * 顺序很要紧：先取消排队中的自动保存，再覆盖，最后重新读取。若把保存留在
+     * 队列里，它会在「写回去」和「读回来」之间发出去，拿编辑器里的旧缓冲把刚
+     * 恢复的内容盖掉。
+     */
+    restoreRevision: async (revisionId) => {
+      const id = get().activeNoteId;
+      if (id === null) return;
+
+      cancelScheduledSave();
+      set({ saveState: "saving" });
+
+      try {
+        const outcome = await api.restoreNoteRevision(revisionId);
+        if (outcome.status === "conflict") {
+          // 后端不做冲突检查，所以冲突在这里不该出现；真出现就直接说出来。
+          set({ saveState: "conflict", diskHash: outcome.diskHash });
+          return;
+        }
+
+        await get().reloadFromDisk();
+      } catch (error) {
+        set({ saveState: "error", error: errorMessage(error) });
+      }
     },
 
     reloadFromDisk: async () => {

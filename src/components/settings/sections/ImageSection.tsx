@@ -176,6 +176,9 @@ export function ImageSection() {
   const [imageDir, setImageDir] = useSetting("imageDir");
   const [imageAutoInsert, setImageAutoInsert] = useSetting("imageAutoInsert");
   const [imageMaxWidth, setImageMaxWidth] = useSetting("imageMaxWidth");
+  const [imageCompress, setImageCompress] = useSetting("imageCompress");
+  const [imageMaxEdge, setImageMaxEdge] = useSetting("imageMaxEdge");
+  const [imageQuality, setImageQuality] = useSetting("imageQuality");
   const [uploadMode, setUploadMode] = useSetting("imageUploadMode");
   const [provider, setProvider] = useSetting("gitProvider");
   const [repo, setRepo] = useSetting("gitRepo");
@@ -309,6 +312,46 @@ export function ImageSection() {
             checked={imageAutoInsert}
             onChange={setImageAutoInsert}
           />
+        </SettingRow>
+        <SettingRow
+          label="保存前压缩"
+          hint="长边超过上限的缩小、生僻格式转成 JPEG；PNG 只缩尺寸，避免文字边上出现压缩噪声"
+          stacked
+        >
+          {/* 开关与它管着的两个旋钮放在一行，关掉时下面两个就跟着失去意义。 */}
+          <div className="flex flex-col gap-3">
+            <Toggle
+              ariaLabel="保存前压缩"
+              checked={imageCompress}
+              onChange={setImageCompress}
+            />
+            {imageCompress && (
+              <>
+                <SettingRow label="长边上限" hint="按比例缩到这么宽，不裁剪">
+                  <RangeField
+                    ariaLabel="长边上限"
+                    value={imageMaxEdge}
+                    min={640}
+                    max={4000}
+                    step={80}
+                    onChange={setImageMaxEdge}
+                    unit="px"
+                  />
+                </SettingRow>
+                <SettingRow label="JPEG 质量" hint="只影响转成 JPEG 的图，PNG 用不到">
+                  <RangeField
+                    ariaLabel="JPEG 质量"
+                    value={imageQuality}
+                    min={40}
+                    max={100}
+                    step={1}
+                    onChange={setImageQuality}
+                    unit=""
+                  />
+                </SettingRow>
+              </>
+            )}
+          </div>
         </SettingRow>
       </SettingGroup>
 

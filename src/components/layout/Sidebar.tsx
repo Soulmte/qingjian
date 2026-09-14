@@ -111,7 +111,9 @@ export function Sidebar({ width }: { width: number }) {
 
       <SidebarSearch />
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* 滚动容器在文件树内部：虚拟化要知道滚到哪里了，让外面包一层只会多一份
+          需要同步的状态。 */}
+      <div className="min-h-0 flex-1">
         <FileTree />
       </div>
 

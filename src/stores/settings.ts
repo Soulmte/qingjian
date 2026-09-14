@@ -32,6 +32,9 @@ export const defaultSettings: AppSettings = {
   imageDir: "assets",
   imageAutoInsert: true,
   imageMaxWidth: 100,
+  imageCompress: true,
+  imageMaxEdge: 1920,
+  imageQuality: 82,
 
   imageUploadMode: "local",
   gitProvider: "github",
@@ -178,6 +181,9 @@ export function sanitizeSettings(raw: Record<string, unknown>): AppSettings {
     imageDir: text(raw.imageDir, d.imageDir, 80),
     imageAutoInsert: bool(raw.imageAutoInsert, d.imageAutoInsert),
     imageMaxWidth: clamp(raw.imageMaxWidth, 30, 100, d.imageMaxWidth),
+    imageCompress: bool(raw.imageCompress, d.imageCompress),
+    imageMaxEdge: clamp(raw.imageMaxEdge, 640, 4000, d.imageMaxEdge),
+    imageQuality: clamp(raw.imageQuality, 40, 100, d.imageQuality),
 
     imageUploadMode: pick(raw.imageUploadMode, ["local", "git"], d.imageUploadMode),
     gitProvider: pick(raw.gitProvider, ["github", "gitee"], d.gitProvider),
