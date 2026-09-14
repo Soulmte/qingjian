@@ -97,6 +97,7 @@
 <tbody>
 <tr><td><code>Qingjian_x.y.z_x64-setup.exe</code></td><td>绝大多数人</td><td>单文件安装包（NSIS），双击按提示走完即可</td></tr>
 <tr><td><code>Qingjian_x.y.z_x64_zh-CN.msi</code></td><td>需要静默部署</td><td>可用 <code>msiexec /i 包名.msi /qn</code> 批量安装</td></tr>
+<tr><td><code>Qingjian_x.y.z_x64-portable.zip</code></td><td>不想安装，或安装包被浏览器拦了</td><td>解压即用，双击里面的 <code>qingjian.exe</code>；与安装版共用设置和索引，但不会自动更新、也配不了「双击 .md 打开」</td></tr>
 </tbody>
 </table>
 
@@ -116,7 +117,7 @@
 <li><strong>换条路下。</strong>PowerShell 里一行，同样绕开浏览器：<code>curl.exe -L -o setup.exe "下载地址"</code></li>
 </ul>
 
-<p>下完可以自己核对一下 SHA-256，确认文件没被动过：<code>Get-FileHash .\Qingjian_0.2.0_x64-setup.exe -Algorithm SHA256</code></p>
+<p>下完可以自己核对一下 SHA-256，确认文件没被动过。发布页上有一份 <code>SHA256SUMS.txt</code>，对照着看就行：<code>Get-FileHash .\Qingjian_0.2.0_x64-setup.exe -Algorithm SHA256</code></p>
 
 <h2>数据存在哪里</h2>
 
