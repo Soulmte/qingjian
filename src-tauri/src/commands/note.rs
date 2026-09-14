@@ -10,10 +10,20 @@ use crate::search;
 use crate::services;
 use crate::state::AppState;
 
-/// 每篇笔记保留多少个历史版本。
+/// 每篇笔记保留多少个**自动**历史版本（手动钉的不算在内）。
 ///
-/// 开自动保存时一天就能攒出几千版，全文副本不设上限迟早会把库撑爆。
-const REVISION_KEEP: i64 = 50;
+/// 配上 5 分钟的时间闸门，100 版相当于 8 小时左右的连续写作，或者几天的正常
+/// 使用；一篇 7 KB 的笔记全存下来也就 700 KB，本地 SQLite 完全吃得住。
+const REVISION_KEEP: i64 = 100;
+
+/// 自动留档的最小间隔（秒）。
+///
+/// 自动保存是「停止输入 800ms 后写一次」，逐次留档意味着停下来想一下就算一版：
+/// 写十几分钟就能攒出上百版，上限瞬间被冲干净，剩下的只是最后几分钟的草稿。
+/// 而历史版本要回答的是「我想回到动手之前」，不是「我想回到 3 秒前」（后者是
+/// Ctrl+Z 的活），所以粗粒度才对：一次连续写作只留「开始之前」那一版，长时间
+/// 写作每 5 分钟一版。
+const REVISION_MIN_GAP_SECS: i64 = 5 * 60;
 
 /// Characters shown around a search hit in the results list.
 const SNIPPET_CHARS: usize = 90;
@@ -136,14 +146,14 @@ pub async fn save_note_impl(
     })
 }
 
-/// 把即将被覆盖的那一版记进历史。
+/// 把即将被覆盖的那一版记进历史，受时间闸门限制。
 ///
 /// 两种情况不记：
 ///
 /// - **正文没变。** 关掉自动保存时不会走到这里，开着的时候每几百毫秒就会保存
 ///   一次，而那些保存大多发生在「正文没动、只是光标动了」之后。
-/// - **与上一条历史完全相同。** 来回改又改回去的时候会出现：最新那条已经是这
-///   个内容了，再记一条只是把列表占满。
+/// - **距上一条太近。** 见 [`REVISION_MIN_GAP_SECS`]：连续写作中间停顿多次，
+///   逐次留档只会把有用的版本挤出上限。
 ///
 /// 比较一律用 `hash_content_lf`，因为 `previous` 是磁盘上的原文（可能是 CRLF），
 /// 而 `incoming` 是编辑器交回来的（一定是 LF）——直接比字符串会把每个 CRLF 文件
@@ -160,20 +170,67 @@ async fn snapshot_revision(
     }
 
     let mut tx = pool.begin().await?;
-    if repo::latest_revision_hash(&mut *tx, note_id).await?.as_deref() == Some(hash.as_str()) {
-        return Ok(());
+    if let Some((latest_hash, age)) = repo::latest_revision(&mut *tx, note_id).await? {
+        // 同一个内容不必记两遍：改回去又改回来时会遇到。
+        if latest_hash == hash {
+            return Ok(());
+        }
+        if age < REVISION_MIN_GAP_SECS {
+            return Ok(());
+        }
     }
 
-    repo::insert_revision(&mut *tx, note_id, previous, &hash).await?;
+    repo::insert_revision(&mut *tx, note_id, previous, &hash, false).await?;
     repo::prune_revisions(&mut *tx, note_id, REVISION_KEEP).await?;
     tx.commit().await?;
 
     Ok(())
 }
 
+/// 把**当前**文件内容记一版，不受时间闸门限制。
+///
+/// 两个地方要用它，而两者都不是日常自动保存：
+///
+/// - 手动钉一个版本：用户点它就是为了「以后要能回到这一刻」，闸门在这里毫无
+///   意义。
+/// - 恢复之前先钉住当前版：恢复是一次明确的覆盖，闸门要是把它挡掉，「恢复错了」
+///   就再也回不来了。
+///
+/// 与最新一版内容相同时不重复记，返回 `false`。
+async fn record_current(pool: &SqlitePool, note_id: i64, is_manual: bool) -> AppResult<bool> {
+    let note = repo::fetch_note(pool, note_id).await?;
+    let workspace = repo::fetch_workspace(pool, note.workspace_id).await?;
+    let path = services::resolve_within(Path::new(&workspace.root_path), &note.rel_path)?;
+
+    // 文件不在（刚被别的程序删了）就没什么可钉的。
+    let Ok(content) = services::read_text(&path) else {
+        return Ok(false);
+    };
+    let hash = services::hash_content_lf(&content);
+
+    let mut tx = pool.begin().await?;
+    if let Some((latest_hash, _)) = repo::latest_revision(&mut *tx, note_id).await? {
+        if latest_hash == hash {
+            return Ok(false);
+        }
+    }
+
+    repo::insert_revision(&mut *tx, note_id, &content, &hash, is_manual).await?;
+    repo::prune_revisions(&mut *tx, note_id, REVISION_KEEP).await?;
+    tx.commit().await?;
+
+    Ok(true)
+}
+
 /// 一篇笔记的历史版本，新的在前。
 pub async fn list_revisions_impl(pool: &SqlitePool, note_id: i64) -> AppResult<Vec<NoteRevision>> {
     repo::list_revisions(pool, note_id).await
+}
+
+/// 手动钉一个版本。返回是否真的新增了一版——与最新一版内容相同时返回 `false`，
+/// 界面上该说的是「没有变化」而不是「已记下」。
+pub async fn snapshot_note_impl(pool: &SqlitePool, note_id: i64) -> AppResult<bool> {
+    record_current(pool, note_id, true).await
 }
 
 /// 取一版来看，`restore` 之前要先给用户看过。
@@ -184,11 +241,14 @@ pub async fn read_revision_impl(pool: &SqlitePool, revision_id: i64) -> AppResul
 /// 把一版写回去。
 ///
 /// 走的是普通保存那条路，只是不做冲突检查：点「恢复」本身就是一次明确的覆盖
-/// 决定（和冲突横幅里的「用我的版本覆盖」同一个意思）。好处是恢复之前会先自动
-/// 记下当前这一版，所以「恢复错了」可以再恢复回来，而不用为了这个另写一段。
+/// 决定（和冲突横幅里的「用我的版本覆盖」同一个意思）。写之前先把当前这一版钉住，
+/// 所以「恢复错了」可以再恢复回来。
 pub async fn restore_revision_impl(pool: &SqlitePool, revision_id: i64) -> AppResult<SaveOutcome> {
     let revision = repo::fetch_revision(pool, revision_id).await?;
-    save_note_impl(pool, revision.revision.note_id, &revision.content, None).await
+    let note_id = revision.revision.note_id;
+
+    record_current(pool, note_id, false).await?;
+    save_note_impl(pool, note_id, &revision.content, None).await
 }
 
 /// Creates a new Markdown file inside the workspace and returns its note row.
@@ -410,6 +470,11 @@ pub async fn list_note_revisions(
     note_id: i64,
 ) -> AppResult<Vec<NoteRevision>> {
     list_revisions_impl(&state.pool, note_id).await
+}
+
+#[tauri::command]
+pub async fn snapshot_note(state: State<'_, AppState>, note_id: i64) -> AppResult<bool> {
+    snapshot_note_impl(&state.pool, note_id).await
 }
 
 #[tauri::command]
@@ -804,21 +869,98 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn history_is_capped() {
+    async fn a_second_save_in_the_same_burst_records_nothing() {
         let (_dir, pool, id) = note_with_history().await;
 
-        for index in 0..REVISION_KEEP + 5 {
-            save_note_impl(&pool, id, &format!("# 第 {index} 版\n"), None)
-                .await
-                .expect("save");
-        }
+        save_note_impl(&pool, id, "# 第二版\n", None).await.expect("save");
+        save_note_impl(&pool, id, "# 第三版\n", None).await.expect("save");
+        save_note_impl(&pool, id, "# 第四版\n", None).await.expect("save");
+
+        // 自动保存是「停止输入 800ms 后写一次」，停下来想一下就是一次保存。
+        // 逐次留档的话，一次连续写作就能把上限冲干净。
+        let revisions = list_revisions_impl(&pool, id).await.expect("list");
+        assert_eq!(revisions.len(), 1, "只该留下动手之前那一版");
+        let only = read_revision_impl(&pool, revisions[0].id).await.expect("read");
+        assert!(only.content.contains("第一版"));
+    }
+
+    #[tokio::test]
+    async fn the_gate_opens_again_once_enough_time_has_passed() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        save_note_impl(&pool, id, "# 第二版\n", None).await.expect("save");
+
+        // 把已有那一版的时间往前挪，等价于「隔了一会儿又改」。
+        sqlx::query("UPDATE note_revision SET created_at = created_at - ? WHERE note_id = ?")
+            .bind(REVISION_MIN_GAP_SECS + 1)
+            .bind(id)
+            .execute(&pool)
+            .await
+            .expect("backdate");
+
+        save_note_impl(&pool, id, "# 第三版\n", None).await.expect("save");
+
+        assert_eq!(list_revisions_impl(&pool, id).await.expect("list").len(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_gate_never_blocks_a_manual_snapshot() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        // 连打两次，第二次的内容与最新一版相同，所以没有新增。
+        assert!(snapshot_note_impl(&pool, id).await.expect("pin"));
+        assert!(!snapshot_note_impl(&pool, id).await.expect("pin again"));
 
         let revisions = list_revisions_impl(&pool, id).await.expect("list");
-        assert_eq!(revisions.len() as i64, REVISION_KEEP);
+        assert_eq!(revisions.len(), 1);
+        assert!(revisions[0].is_manual, "手动钉的要标出来");
+    }
 
-        // 留下的应该是最新的那一段，而不是最早的。
-        let newest = read_revision_impl(&pool, revisions[0].id).await.expect("read");
-        assert!(newest.content.contains(&format!("第 {} 版", REVISION_KEEP + 3)));
+    #[tokio::test]
+    async fn automatic_history_is_capped_but_manual_versions_are_not() {
+        let (_dir, pool, id) = note_with_history().await;
+
+        // 直接写库：闸门会拦住连续保存，而这里要测的是裁剪本身。
+        let mut conn = pool.acquire().await.expect("acquire");
+        repo::insert_revision(&mut conn, id, "# 钉住这一版\n", "manual-hash", true)
+            .await
+            .expect("pin");
+        for index in 0..REVISION_KEEP + 5 {
+            repo::insert_revision(
+                &mut conn,
+                id,
+                &format!("# 第 {index} 版\n"),
+                &format!("hash-{index}"),
+                false,
+            )
+            .await
+            .expect("insert");
+        }
+        repo::prune_revisions(&mut conn, id, REVISION_KEEP)
+            .await
+            .expect("prune");
+        drop(conn);
+
+        let revisions = list_revisions_impl(&pool, id).await.expect("list");
+        let manual = revisions.iter().filter(|r| r.is_manual).count();
+        assert_eq!(manual, 1, "手动钉的那一版无论多老都不能被裁掉");
+        assert_eq!(
+            revisions.len() as i64,
+            REVISION_KEEP + 1,
+            "自动的另一边只留 REVISION_KEEP 条"
+        );
+
+        // 留下的该是最新那一段自动版本，而不是最早的。
+        let newest_auto = revisions
+            .iter()
+            .find(|r| !r.is_manual)
+            .expect("auto revision");
+        let content = read_revision_impl(&pool, newest_auto.id)
+            .await
+            .expect("read")
+            .content;
+        // 循环插到 REVISION_KEEP + 4 为止，最新那一条就是它。
+        assert!(content.contains(&format!("第 {} 版", REVISION_KEEP + 4)));
     }
 
     #[tokio::test]

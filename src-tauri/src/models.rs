@@ -55,6 +55,8 @@ pub struct NoteRevision {
     pub size: i64,
     /// 正文里第一行非空文字，截断过的，让列表能认出是哪一版。
     pub preview: String,
+    /// 手动钉的版本永不被裁剪；自动留档的会。
+    pub is_manual: bool,
 }
 
 /// 一条带正文的历史版本。

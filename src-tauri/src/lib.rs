@@ -131,6 +131,7 @@ pub fn run() {
             commands::note::list_note_revisions,
             commands::note::read_note_revision,
             commands::note::restore_note_revision,
+            commands::note::snapshot_note,
             commands::asset::save_image,
             commands::asset::fetch_image_source,
             commands::file::export_text,

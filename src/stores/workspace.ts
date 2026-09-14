@@ -73,6 +73,13 @@ interface WorkspaceState {
    * 会先给当前这一版记一条历史，所以恢复错了还能再恢复回来。
    */
   restoreRevision: (revisionId: number) => Promise<void>;
+  /**
+   * 钉一个版本。
+   *
+   * 先把待写的改动落盘再钉：钉的是**文件里的内容**，不先 flush 的话钉下来的是
+   * 上一次保存的样子。返回是否真的新增了一版（与最新一版内容相同时为 `false`）。
+   */
+  snapshotNow: () => Promise<boolean>;
   /** Writes the buffer over the version that arrived from outside. */
   overwriteFromDisk: () => Promise<void>;
   /**
@@ -419,6 +426,14 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       } catch (error) {
         set({ saveState: "error", error: errorMessage(error) });
       }
+    },
+
+    snapshotNow: async () => {
+      const id = get().activeNoteId;
+      if (id === null) return false;
+
+      await get().flushSave();
+      return api.snapshotNote(id);
     },
 
     reloadFromDisk: async () => {

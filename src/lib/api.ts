@@ -86,6 +86,11 @@ export const api = {
    */
   restoreNoteRevision: (revisionId: number) =>
     invoke<SaveOutcome>("restore_note_revision", { revisionId }),
+  /**
+   * 手动钉一个版本。返回是否真的新增了一版：与最新一版内容相同时为 `false`，
+   * 界面上该说的是「没有变化」而不是「已记下」。
+   */
+  snapshotNote: (noteId: number) => invoke<boolean>("snapshot_note", { noteId }),
 
   // Assets
   saveImage: (workspaceId: number, dir: string, fileName: string, data: number[]) =>

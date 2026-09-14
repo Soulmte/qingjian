@@ -1,4 +1,4 @@
-import { Check, CircleAlert, History, LoaderCircle, PencilLine, Type } from "lucide-react";
+import { Check, CircleAlert, History, LoaderCircle, PencilLine, Pin, Type } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect, useState } from "react";
 
@@ -85,11 +85,20 @@ export function StatusBar() {
   const saveState = useWorkspace((state) => state.saveState);
   const activeNoteId = useWorkspace((state) => state.activeNoteId);
   const notes = useWorkspace((state) => state.notes);
+  const snapshotNow = useWorkspace((state) => state.snapshotNow);
   // 历史版本入口就在这一栏：侧栏的右键菜单里也有一份，但那条路径要先找到那一行。
   const setHistoryNoteId = useUi((state) => state.setHistoryNoteId);
+  /** 钉完那一句话，几秒后自己消失——这一栏没有别的地方能回话。 */
+  const [pinNotice, setPinNotice] = useState<string | null>(null);
 
   const note = notes.find((item) => item.id === activeNoteId) ?? null;
   const { words, characters } = useDocumentStats(contentLoaded, activeNoteId);
+
+  useEffect(() => {
+    if (!pinNotice) return;
+    const timer = window.setTimeout(() => setPinNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [pinNotice]);
 
   if (activeNoteId === null) return null;
 
@@ -114,6 +123,24 @@ export function StatusBar() {
           <History aria-hidden />
           历史版本
         </button>
+        <button
+          type="button"
+          className="qj-status-action"
+          title="把现在这一刻记进历史；手动记下的版本不会被自动清理掉"
+          onClick={() => {
+            void snapshotNow().then((added) =>
+              setPinNotice(added ? "已记下一个版本" : "与最新一版相同"),
+            );
+          }}
+        >
+          <Pin aria-hidden />
+          记一个版本
+        </button>
+        {pinNotice && (
+          <span className="qj-text-secondary" style={{ color: "var(--qj-accent-strong)" }}>
+            {pinNotice}
+          </span>
+        )}
         <span className="flex items-center gap-1.5 qj-text-secondary" title="字数统计">
           <Type aria-hidden />
           {words} 词 · {characters} 字符

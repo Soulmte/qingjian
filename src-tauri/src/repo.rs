@@ -74,6 +74,7 @@ struct RevisionRow {
     created_at: i64,
     size: i64,
     head: String,
+    is_manual: bool,
 }
 
 impl RevisionRow {
@@ -84,6 +85,7 @@ impl RevisionRow {
             created_at: self.created_at,
             size: self.size,
             preview: preview_of(&self.head),
+            is_manual: self.is_manual,
         }
     }
 }
@@ -110,52 +112,60 @@ pub(crate) fn preview_of(head: &str) -> String {
 
 /// 记一条历史版本。
 ///
-/// 调用方负责先确认这确实是新内容：这个函数只管写。
+/// 调用方负责先确认这确实是新内容，以及该不该受时间闸门限制：这个函数只管写。
 pub async fn insert_revision(
     conn: &mut SqliteConnection,
     note_id: i64,
     content: &str,
     hash: &str,
+    is_manual: bool,
 ) -> AppResult<()> {
     sqlx::query(
-        "INSERT INTO note_revision (note_id, content, revision_hash) VALUES (?, ?, ?)",
+        "INSERT INTO note_revision (note_id, content, revision_hash, is_manual) \
+         VALUES (?, ?, ?, ?)",
     )
     .bind(note_id)
     .bind(content)
     .bind(hash)
+    .bind(is_manual)
     .execute(&mut *conn)
     .await?;
 
     Ok(())
 }
 
-/// 该笔记最新一条版本的哈希，用来去重；没有版本时为 `None`。
-pub async fn latest_revision_hash(
+/// 最新一版的哈希与年龄（秒）；没有版本时为 `None`。
+///
+/// 两件事一起查：哈希用来避免把同一个内容记两遍，年龄用来实现自动留档的时间
+/// 闸门。它们都是「最新那一版」的属性，分两次查只会多一次往返。
+pub async fn latest_revision(
     conn: &mut SqliteConnection,
     note_id: i64,
-) -> AppResult<Option<String>> {
-    let hash = sqlx::query_scalar::<_, String>(
-        "SELECT revision_hash FROM note_revision WHERE note_id = ? \
-         ORDER BY created_at DESC, id DESC LIMIT 1",
+) -> AppResult<Option<(String, i64)>> {
+    let row = sqlx::query_as::<_, (String, i64)>(
+        "SELECT revision_hash, unixepoch() - created_at FROM note_revision \
+         WHERE note_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
     )
     .bind(note_id)
     .fetch_optional(&mut *conn)
     .await?;
 
-    Ok(hash)
+    Ok(row)
 }
 
-/// 只留最近 `keep` 条，多出来的按时间从旧到新删。
+/// 只留最近 `keep` 条**自动**版本，多出来的按时间从旧到新删。
 ///
-/// 不设上限的话，一个开了自动保存的工作区一天就能攒下几千条全文副本。
+/// 不设上限的话，一个开着自动保存的工作区一天就能攒下几千条全文副本。手动钉的
+/// 那些不在计数之内：用户点「记一个版本」就是为了「以后要能回到这一刻」，把它
+/// 裁掉等于骗人。
 pub async fn prune_revisions(
     conn: &mut SqliteConnection,
     note_id: i64,
     keep: i64,
 ) -> AppResult<()> {
     sqlx::query(
-        "DELETE FROM note_revision WHERE note_id = ? AND id NOT IN (\
-           SELECT id FROM note_revision WHERE note_id = ? \
+        "DELETE FROM note_revision WHERE note_id = ? AND is_manual = 0 AND id NOT IN (\
+           SELECT id FROM note_revision WHERE note_id = ? AND is_manual = 0 \
            ORDER BY created_at DESC, id DESC LIMIT ?\
          )",
     )
@@ -172,7 +182,7 @@ pub async fn prune_revisions(
 pub async fn list_revisions(pool: &SqlitePool, note_id: i64) -> AppResult<Vec<NoteRevision>> {
     let rows = sqlx::query_as::<_, RevisionRow>(
         "SELECT id, note_id, created_at, length(content) AS size, \
-                substr(content, 1, 200) AS head \
+                substr(content, 1, 200) AS head, is_manual \
          FROM note_revision WHERE note_id = ? \
          ORDER BY created_at DESC, id DESC",
     )
@@ -185,8 +195,9 @@ pub async fn list_revisions(pool: &SqlitePool, note_id: i64) -> AppResult<Vec<No
 
 /// 取一条版本，连正文一起。
 pub async fn fetch_revision(pool: &SqlitePool, id: i64) -> AppResult<NoteRevisionDetail> {
-    let row = sqlx::query_as::<_, (i64, i64, i64, i64, String, String)>(
-        "SELECT id, note_id, created_at, length(content), substr(content, 1, 200), content \
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64, String, bool, String)>(
+        "SELECT id, note_id, created_at, length(content), substr(content, 1, 200), \
+                is_manual, content \
          FROM note_revision WHERE id = ?",
     )
     .bind(id)
@@ -194,7 +205,7 @@ pub async fn fetch_revision(pool: &SqlitePool, id: i64) -> AppResult<NoteRevisio
     .await?
     .ok_or_else(|| AppError::Message(format!("历史版本不存在：{id}")))?;
 
-    let (id, note_id, created_at, size, head, content) = row;
+    let (id, note_id, created_at, size, head, is_manual, content) = row;
     Ok(NoteRevisionDetail {
         revision: NoteRevision {
             id,
@@ -202,6 +213,7 @@ pub async fn fetch_revision(pool: &SqlitePool, id: i64) -> AppResult<NoteRevisio
             created_at,
             size,
             preview: preview_of(&head),
+            is_manual,
         },
         content,
     })

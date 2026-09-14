@@ -1,5 +1,5 @@
 import { Button, Modal } from "@heroui/react";
-import { History, RotateCcw } from "lucide-react";
+import { History, Pin, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { api, errorMessage } from "@/lib/api";
@@ -30,6 +30,7 @@ export function NoteHistoryDialog() {
   const noteId = useUi((state) => state.historyNoteId);
   const setNoteId = useUi((state) => state.setHistoryNoteId);
   const restoreRevision = useWorkspace((state) => state.restoreRevision);
+  const snapshotNow = useWorkspace((state) => state.snapshotNow);
   const saveState = useWorkspace((state) => state.saveState);
   const notes = useWorkspace((state) => state.notes);
   const workspaces = useWorkspace((state) => state.workspaces);
@@ -136,6 +137,28 @@ export function NoteHistoryDialog() {
     }
   };
 
+  /**
+   * 把现在这一刻钉住。
+   *
+   * 与恢复不同，它不动文件，只是多留一版——用在「我马上要大改这篇」的时候。
+   * 手动钉的版本不参与裁剪，所以不用担心以后被挤掉。
+   */
+  const pin = async () => {
+    if (noteId === null) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const added = await snapshotNow();
+      await loadList(noteId);
+      if (!added) setError("与最新一版内容相同，没有重复记");
+    } catch (problem) {
+      setError(errorMessage(problem));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <Modal.Backdrop isOpen={isOpen} onOpenChange={(open) => !open && setNoteId(null)}>
       <Modal.Container size="lg">
@@ -145,18 +168,24 @@ export function NoteHistoryDialog() {
               <h2 className="text-sm font-medium">历史版本</h2>
               <p className="truncate text-xs text-muted">
                 {note ? note.title : ""}
-                {revisions.length > 0 && ` · 保留最近 ${revisions.length} 版`}
+                {revisions.length > 0 && ` · 共 ${revisions.length} 版`}
               </p>
             </div>
-            <Button
-              size="sm"
-              variant="primary"
-              isDisabled={selectedId === null || busy || saveState === "saving"}
-              onPress={() => void restore()}
-            >
-              <RotateCcw className="size-4" />
-              恢复这一版
-            </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button size="sm" variant="outline" isDisabled={busy} onPress={() => void pin()}>
+                <Pin className="size-4" />
+                记一个版本
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                isDisabled={selectedId === null || busy || saveState === "saving"}
+                onPress={() => void restore()}
+              >
+                <RotateCcw className="size-4" />
+                恢复这一版
+              </Button>
+            </div>
           </div>
 
           {revisions.length === 0 ? (
@@ -164,7 +193,10 @@ export function NoteHistoryDialog() {
               <History className="size-6" />
               <p className="text-xs">还没有历史版本</p>
               <p className="text-[11px] opacity-80">
-                这一版之前的改动会在下次保存时自动留档；保留最近 50 版
+                保存时自动留档，同一篇间隔不足 5 分钟不会重复记；自动版本保留最近 100 版
+              </p>
+              <p className="text-[11px] opacity-80">
+                「记一个版本」钉下的不会被清理，适合动手大改之前先钉一个
               </p>
             </div>
           ) : (
@@ -186,6 +218,12 @@ export function NoteHistoryDialog() {
                           className="block text-xs font-medium"
                           style={isSelected ? { color: "var(--qj-accent-strong)" } : undefined}
                         >
+                          {revision.isManual && (
+                            <Pin
+                              aria-label="手动记下的"
+                              className="mr-1 inline size-3 align-[-2px]"
+                            />
+                          )}
                           {formatRevisionTime(revision.createdAt)}
                         </span>
                         <span className="block truncate text-[11px] text-muted">

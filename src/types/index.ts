@@ -59,6 +59,8 @@ export interface NoteRevision {
   size: number;
   /** 正文里第一行非空文字（去过 Markdown 标记、截断过）。 */
   preview: string;
+  /** 手动钉的版本不会被裁掉。 */
+  isManual: boolean;
 }
 
 export interface NoteRevisionDetail {

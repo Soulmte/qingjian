@@ -47,7 +47,13 @@ pub async fn init_pool(app_data_dir: &Path) -> AppResult<SqlitePool> {
         .connect_with(options)
         .await?;
 
-    MIGRATOR.run(&pool).await?;
+    if let Err(error) = MIGRATOR.run(&pool).await {
+        // 先把连接关干净再报错：调用方接下来会把坏掉的库改名挪走。池的析构是
+        // 后台异步做的，等不到它，而`quarantine` 里那个改名的重试就是为这一
+        // 类残留句柄准备的。
+        pool.close().await;
+        return Err(error.into());
+    }
 
     Ok(pool)
 }
@@ -103,10 +109,33 @@ fn quarantine(app_data_dir: &Path) -> AppResult<std::path::PathBuf> {
             continue;
         }
         let to = app_data_dir.join(format!("{DB_FILE}.corrupt-{stamp}{suffix}"));
-        std::fs::rename(&from, &to)?;
+        rename_with_retry(&from, &to)?;
     }
 
     Ok(backup)
+}
+
+/// 改名，碰上一时的占用就再试几次。
+///
+/// Windows 上这个改名是**偶发**失败的，报 `os error 32`（另一个程序正在使用此
+/// 文件）：连接可能刚刚关闭、杀毒软件可能正在扫刚写下的文件、索引器也可能正好
+/// 在碰它。而这里等的只是一个瞬间。
+///
+/// 不能只试一次：改名失败意味着恢复失败，而恢复失败意味着应用起不来——用户
+/// 看到的是一句「无法打开工作区数据库」，而其实再过半秒就好了。等一会儿的
+/// 上限是 375ms，比起「打不开」完全值得。
+fn rename_with_retry(from: &Path, to: &Path) -> AppResult<()> {
+    let mut last: Option<std::io::Error> = None;
+
+    for attempt in 0..6 {
+        match std::fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(error) => last = Some(error),
+        }
+        std::thread::sleep(Duration::from_millis(25 * (attempt + 1)));
+    }
+
+    Err(last.expect("循环至少跑过一次").into())
 }
 
 #[cfg(test)]
