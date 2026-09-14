@@ -3,12 +3,14 @@ import type { SettingsSection } from "@/lib/settings-sections";
 /**
  * Every row in the settings, for the search box.
  *
- * Generated from the section sources — `SettingsRow.label` and its `hint` — so the
+ * Generated from the section sources — `SettingRow.label` and its `hint` — so the
  * labels are the ones actually on screen. A test walks the sources again and fails
  * when a label here no longer exists, which is how a rename gets noticed instead of
  * producing a search result that jumps nowhere.
  *
  * `hint` is searched too: people look for 拼写 or 延迟, not for the label above it.
+ *
+ * Regenerate with `python scripts/gen_settings_index.py`.
  */
 export interface SettingsIndexEntry {
   section: SettingsSection;
@@ -83,5 +85,6 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   { section: "updates", group: "版本", label: "当前版本", hint: "" },
   { section: "updates", group: "版本", label: "上次检查", hint: "" },
   { section: "updates", group: "版本", label: "启动时自动检查", hint: "每次启动查一次，有新版本时弹窗提示。" },
+  { section: "updates", group: "网络", label: "下载代理", hint: "形如 http://127.0.0.1:7890；留空则直连。只作用于青简自己的更新请求（检查与下载都走它），安装前仍会校验签名" },
   { section: "updates", group: "检查", label: "检查更新", hint: "" },
 ];

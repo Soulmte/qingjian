@@ -96,6 +96,31 @@ describe("the index itself", () => {
     expect(missing.map((entry) => `${entry.section}:${entry.label}`)).toEqual([]);
   });
 
+  it("lists every row the sources have", () => {
+    // The other direction, and the one that actually rots: adding a `SettingRow`
+    // makes the index stale until someone reruns the generator, and a row that is
+    // missing here is simply invisible to the search box. A new row is the common
+    // case, so it is worth a failure of its own.
+    const unlisted: string[] = [];
+    for (const [section, file] of Object.entries(SECTION_FILES)) {
+      const source = readFileSync(
+        new URL(`../components/settings/sections/${file}`, import.meta.url),
+        "utf8",
+      );
+      for (const match of source.matchAll(/<SettingRow\b([^>]*)>/g)) {
+        const label = /label="([^"]+)"/.exec(match[1])?.[1];
+        // 预览 is a sample box, not a setting — the generator skips it too.
+        if (!label || label === "预览") continue;
+        const listed = SETTINGS_INDEX.some(
+          (entry) => entry.section === section && entry.label === label,
+        );
+        if (!listed) unlisted.push(`${section}:${label}`);
+      }
+    }
+
+    expect(unlisted).toEqual([]);
+  });
+
   it("names every row unambiguously", () => {
     // 导出 is where this matters: three rows are called 「字体」 (body, heading,
     // code) and two are called 「字号」. They are told apart by their group, so the
