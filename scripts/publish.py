@@ -278,24 +278,59 @@ class Gitee:
 
     def ensure_repo(self, repo: str, owner: str, description: str, login: str) -> None:
         state = self.repo_state(repo)
-        if state == "exists":
-            print(f"  仓库 {repo} 已存在，跳过创建")
-            return
         if state == "unknown":
             raise SystemExit(f"无法确认仓库 {repo} 是否存在，先手工看一眼")
 
-        payload = {
-            "access_token": self.token,
-            "name": repo.split("/")[-1],
-            "description": description,
-            "private": "false",
-            "auto_init": "false",
-        }
-        url = f"{self.api}/user/repos" if owner == login else f"{self.api}/orgs/{owner}/repos"
-        status, _, body = self._call("POST", url, form=payload)
-        if status not in (200, 201) and not self.dry_run:
-            raise SystemExit(f"创建仓库失败（{status}）：{body[:300]}")
-        print(f"  已创建公开仓库 {repo}")
+        if state == "missing":
+            payload = {
+                "access_token": self.token,
+                "name": repo.split("/")[-1],
+                "description": description,
+                "private": "false",
+                "auto_init": "false",
+            }
+            url = f"{self.api}/user/repos" if owner == login else f"{self.api}/orgs/{owner}/repos"
+            status, _, body = self._call("POST", url, form=payload)
+            if status not in (200, 201) and not self.dry_run:
+                raise SystemExit(f"创建仓库失败（{status}）：{body[:300]}")
+            print(f"  已创建仓库 {repo}")
+
+        self.ensure_public(repo)
+
+    def ensure_public(self, repo: str) -> None:
+        """确认仓库真是公开的。
+
+        建仓时传的 `private=false` 不一定会被采纳：v0.1.8 那次建出来就是个私有
+        仓库，而脚本照样打印「已创建公开仓库」。私有的镜像等于没有——用户点进
+        下载链接只会看到登录页，所以建完还得自己确认一遍。
+        """
+        if self.dry_run:
+            return
+
+        status, _, body = self._call("GET", f"{self.api}/repos/{repo}")
+        if status == 200 and json.loads(body).get("private") is False:
+            print(f"  仓库 {repo} 是公开的")
+            return
+
+        # 更新仓库的接口要求带上 name，只传 private 会报 400 name is missing。
+        status, _, body = self._call(
+            "PATCH",
+            f"{self.api}/repos/{repo}",
+            form={
+                "access_token": self.token,
+                "name": repo.split("/")[-1],
+                "private": "false",
+            },
+        )
+        if status == 200 and json.loads(body).get("private") is False:
+            print(f"  已把仓库 {repo} 改为公开")
+            return
+
+        raise SystemExit(
+            f"仓库 {repo} 仍是私有的（PATCH 返回 {status}：{body[:200]}）。\n"
+            "私有的镜像没人能下载，先别发。多半是账号没通过实名认证——"
+            "Gitee 不允许未实名的账号持有公开仓库，在网页上认证一次再来。"
+        )
 
     def release(self, repo: str, tag: str) -> dict | None:
         status, _, body = self._call("GET", f"{self.api}/repos/{repo}/releases/tags/{tag}")

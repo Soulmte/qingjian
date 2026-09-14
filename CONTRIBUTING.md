@@ -92,11 +92,16 @@
 
 * **改完自动更新相关的东西，至少本地跑一次真实验证**（装个正式版、让它更新一次）。开发模式下更新器的行为和正式版不同，光看代码不算数。
 
-* **Gitee 只能手动发**，更新端点仍指向 GitHub，Gitee 只作镜像：
+* **Gitee 只能手动发**，更新端点仍指向 GitHub，Gitee 只作镜像。注意它的账号名与 GitHub 不同（GitHub 是 `Soulmte`，Gitee 是 `rain-drops`）：
 
   ```bash
-  python scripts/publish.py gitee --repo <owner>/qingjian --tag v0.1.6 \
+  python scripts/publish.py gitee --repo rain-drops/qingjian --tag v0.1.8 \
     --notes-file release-notes.md --create-repo \
     --asset "本地路径=ASCII 发布名"
   ```
+
+  两点都是踩出来的：
+
+  * **首次发布要先把代码和 tag 推上去。** Gitee 建 Release 时要给 tag 找一个 commit，空仓库没有，会报 `创建标签失败：v0.1.8`。先 `git push <gitee 地址> main v0.1.8`，再跑上面的命令。
+  * **建仓时那句 `private=false` 不一定会被采纳。** v0.1.8 那次建出来就是私有仓库，而脚本照样打印了「已创建公开仓库」——私有的镜像等于没有，用户点进去只有登录页。脚本现在建完会自己确认一遍并改回来，改不动就直接停下来报错（那种情况多半是账号没过实名认证）。
 
