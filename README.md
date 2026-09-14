@@ -297,7 +297,7 @@
 <li>改 <code>src-tauri/tauri.conf.json</code> 里的版本号（安装包、应用内「关于」与 <code>latest.json</code> 都取自它），<code>package.json</code> 与 <code>Cargo.toml</code> 的版本号顺手对齐，再更新 <code>release-notes.md</code>。</li>
 <li>提交，然后打 tag 并推送：<code>git tag -a v0.2.0 -m "青简 v0.2.0" &amp;&amp; git push origin v0.2.0</code>。</li>
 <li>GitHub Actions 会自动跑测试、构建并签名的 Windows 安装包，生成 <code>latest.json</code>，全部挂到 <code>v0.2.0</code> 这个 Release 上（见 <code>.github/workflows/release.yml</code>）。已装的青简会在下次启动时读到它并自动更新。</li>
-<li>要同步发到 Gitee，在本地构建后执行：<code>python scripts/publish.py gitee --repo &lt;owner&gt;/qingjian --tag v0.2.0 --notes-file release-notes.md --create-repo --asset "本地路径=ASCII 发布名"</code>。更新端点目前指向 GitHub，Gitee 仅作镜像。</li>
+<li>要同步发到 Gitee（账号 <code>rain-drops</code>，与 GitHub 的 <code>Soulmte</code> 不同），把 CI 已经建好的安装包下载下来再上传即可，不必本地重新构建：<code>python scripts/publish.py gitee --repo rain-drops/qingjian --tag v0.2.0 --notes-file release-notes.md --create-repo --asset "本地路径=ASCII 发布名"</code>。更新端点目前指向 GitHub，Gitee 仅作镜像。</li>
 </ol>
 
 <p>三点经验写在这里免得再踩：<strong>安装包的发布名要用 ASCII</strong>——GitHub 保存附件名时会丢掉非 ASCII 字符，本地叫 <code>青简_x64-setup.exe</code> 的文件必须用 <code>--asset 路径=Qingjian_x64-setup.exe</code> 换名发布，<code>latest.json</code> 里的地址也要跟着改；<strong>MSI 的代码页必须是 936</strong>，WiX 默认的 1252 装不下「青简」两个字，<code>tauri.conf.json</code> 里已指定 <code>zh-CN</code>；<strong><code>tauri.conf.json</code> 是严格 JSON</strong>，不能写 <code>//</code> 注释，注释请写在这里或工作流里。</p>
@@ -316,7 +316,7 @@
 
 <ul>
 <li>GitHub：<a href="https://github.com/Soulmte/qingjian">https://github.com/Soulmte/qingjian</a>（主仓库，Release 在此）</li>
-<li>Gitee：<a href="https://gitee.com/Soulmte/qingjian">https://gitee.com/Soulmte/qingjian</a>（镜像）</li>
+<li>Gitee：<a href="https://gitee.com/rain-drops/qingjian">https://gitee.com/rain-drops/qingjian</a>（镜像，账号名与 GitHub 不同）</li>
 </ul>
 
 <p>发现问题、想要某个功能，欢迎提 issue。提 issue 时如果能附上「在做什么、期待什么、实际发生了什么」，修起来会快很多。</p>

@@ -8,8 +8,16 @@
 export const PROJECT_OWNER = "Soulmte";
 export const PROJECT_NAME = "qingjian";
 
+/**
+ * Gitee 镜像所在账号。
+ *
+ * 两侧账号名并不相同：GitHub 是 `Soulmte`，Gitee 是 `rain-drops`。
+ * 镜像只用来在「下载太慢」时给一条手动出路，自动更新仍然只走 GitHub。
+ */
+export const GITEE_OWNER = "rain-drops";
+
 export const GITHUB_URL = `https://github.com/${PROJECT_OWNER}/${PROJECT_NAME}`;
-export const GITEE_URL = `https://gitee.com/${PROJECT_OWNER}/${PROJECT_NAME}`;
+export const GITEE_URL = `https://gitee.com/${GITEE_OWNER}/${PROJECT_NAME}`;
 
 /** 检查更新用的仓库，`owner/repo`，走 GitHub Releases。 */
 export const UPDATE_REPOSITORY = `${PROJECT_OWNER}/${PROJECT_NAME}`;
