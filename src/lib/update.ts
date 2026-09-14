@@ -10,10 +10,15 @@ export type { Update };
  * 上就拒绝安装。这是这套机制里唯一不能省的一步：静默安装意味着我们会在用户不
  * 知情的情况下执行一个安装包，必须能确认它确实出自我们自己。
  *
+ * `proxy` 由「设置 → 更新」给出。Tauri 把它记在这次检查拿到的 Update 对象上，
+ * 后续 `download()` 也走它——这是运行时唯一能改变下载路径的入口。代理只能拖慢或
+ * 加快传输，改不了包，因为验签用的是仓库外的那把公钥。
+ *
  * 返回 `null` 表示当前已是最新版本。
  */
-export function checkForUpdates(): Promise<Update | null> {
-  return check();
+export function checkForUpdates(proxy?: string): Promise<Update | null> {
+  const trimmed = proxy?.trim();
+  return check(trimmed ? { proxy: trimmed } : undefined);
 }
 
 /** 把 `latest.json` 里的时间写成人能读的样子；解析不出来时返回 null。 */
@@ -29,4 +34,22 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
   if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${bytes} B`;
+}
+
+/** 下载速度，形如 `1.4 MB/s`。 */
+export function formatSpeed(bytesPerSecond: number): string {
+  return `${formatBytes(bytesPerSecond)}/s`;
+}
+
+/**
+ * 大约还要多久，形如 `约剩 12 秒`；算不出来时返回 null。
+ *
+ * 只在剩余量还大于 1 秒时才报，否则最后几个字节会让读数跳来跳去。
+ */
+export function formatRemaining(bytesLeft: number, bytesPerSecond: number): string | null {
+  if (bytesPerSecond <= 0 || bytesLeft <= 0) return null;
+  const seconds = Math.round(bytesLeft / bytesPerSecond);
+  if (seconds < 1) return null;
+  if (seconds < 60) return `约剩 ${seconds} 秒`;
+  return `约剩 ${Math.round(seconds / 60)} 分钟`;
 }

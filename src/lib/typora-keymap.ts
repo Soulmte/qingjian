@@ -10,9 +10,16 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
-import type { Command } from "@milkdown/kit/prose/state";
+import {
+  addRowAfterCommand,
+  goToNextTableCellCommand,
+  goToPrevTableCellCommand,
+  insertTableCommand,
+  toggleStrikethroughCommand,
+} from "@milkdown/kit/preset/gfm";
 import { $useKeymap } from "@milkdown/kit/utils";
+
+import { isInTable } from "@/lib/editor/align-selection";
 
 /**
  * Forwards a keypress to a Milkdown command registered in the command manager.
@@ -30,7 +37,7 @@ import { $useKeymap } from "@milkdown/kit/utils";
  * can be captured too early when the object is what gets passed in.
  */
 function dispatch<P = undefined>(command: { key: CmdKey<P> }, payload?: P) {
-  return (ctx: Ctx): Command => {
+  return (ctx: Ctx): (() => boolean) => {
     const commands = ctx.get(commandsCtx);
     return () => commands.call(command.key, payload as P);
   };
@@ -67,6 +74,36 @@ export const typoraKeymap = $useKeymap("typoraKeymap", {
   Link: { shortcuts: "Mod-k", command: dispatch(toggleLinkCommand) },
 
   Strikethrough: { shortcuts: "Alt-Shift-5", command: dispatch(toggleStrikethroughCommand) },
+
+  // Typora's table behaviour: Tab walks the cells and appends a row once the last
+  // one is reached; Shift-Tab walks back. Both decline outside a table, so the
+  // list keymap keeps Tab to itself for indenting a list item.
+  //
+  // Composed from `dispatch` — the one place that reads a command's key — and
+  // called without a `state`, because `commands.call` already runs against the
+  // editor's current one and reports whether the command applied. That report is
+  // what makes the append-on-last-cell fallback possible: the row is only added
+  // when no cell follows.
+  NextTableCell: {
+    shortcuts: "Tab",
+    command: (ctx) => {
+      const nextCell = dispatch(goToNextTableCellCommand)(ctx);
+      const addRow = dispatch(addRowAfterCommand)(ctx);
+      return (state) => {
+        if (!isInTable(state)) return false;
+        if (nextCell()) return true;
+        addRow();
+        return nextCell();
+      };
+    },
+  },
+  PrevTableCell: {
+    shortcuts: "Shift-Tab",
+    command: (ctx) => {
+      const prevCell = dispatch(goToPrevTableCellCommand)(ctx);
+      return (state) => (isInTable(state) ? prevCell() : false);
+    },
+  },
 
   // The alignment chords are deliberately absent. They are owned by the app's
   // `format.align*` commands, which align a block or an image and delegate to

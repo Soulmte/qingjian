@@ -26,6 +26,15 @@ const schema = new Schema({
       toDOM: () => ["h1", 0],
     },
     blockquote: { content: "block+", group: "block", toDOM: () => ["blockquote", 0] },
+    // The table group in the menu is only reachable with these node names in the
+    // schema, and `isInTable` keys off them.
+    table: { content: "table_row+", group: "block", toDOM: () => ["table", 0] },
+    table_row: { content: "table_cell+", toDOM: () => ["tr", 0] },
+    table_cell: {
+      content: "block+",
+      attrs: { alignment: { default: null } },
+      toDOM: () => ["td", 0],
+    },
     "image-block": {
       group: "block",
       atom: true,
@@ -64,6 +73,45 @@ function rowOf(entries: ContextMenuEntry[], submenuId: string): ContextMenuItem[
 
 /** The caret inside the first block. */
 const inFirstBlock = (doc: PmNode) => TextSelection.create(doc, 1);
+
+/** A one-cell table, with the caret in that cell. Content starts at 4. */
+function tableDoc(alignment: string | null = null): PmNode {
+  const cell = schema.node("table_cell", { alignment }, [paragraph("单元格")]);
+  return schema.node("doc", null, [
+    schema.node("table", null, [schema.node("table_row", null, [cell])]),
+  ]);
+}
+
+/**
+ * A `rows` × `cols` table whose cells hold their own coordinates.
+ *
+ * The caret is found by walking the document for the wanted cell rather than by
+ * adding up node sizes: the arithmetic is easy to get subtly wrong and says
+ * nothing about what is being tested.
+ */
+function grid(rows: number, cols: number, target: { row: number; col: number }) {
+  const body: PmNode[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    const cells: PmNode[] = [];
+    for (let col = 0; col < cols; col += 1) {
+      cells.push(schema.node("table_cell", null, [paragraph(`${row}-${col}`)]));
+    }
+    body.push(schema.node("table_row", null, cells));
+  }
+
+  const doc = schema.node("doc", null, [schema.node("table", null, body)]);
+  let caret = 0;
+  doc.descendants((node, pos) => {
+    if (node.type.name === "paragraph" && node.textContent === `${target.row}-${target.col}`) {
+      caret = pos + 1;
+    }
+    return true;
+  });
+
+  return { doc, caret };
+}
+
+const inTableCell = (doc: PmNode) => TextSelection.create(doc, 4);
 
 /** The block itself selected, which is how clicking an image behaves. */
 const firstBlockSelected = (doc: PmNode) => NodeSelection.create(doc, 0);
@@ -177,6 +225,88 @@ describe("buildEditorMenu", () => {
   it("adds the image group only when an image is selected", () => {
     const plain = buildEditorMenu(hostOf(schema.node("doc", null, [paragraph("正文")])));
     expect(submenuOf(plain, "menu.image")).toBeUndefined();
+  });
+
+  it("adds the table group only while the caret is in a table", () => {
+    const plain = buildEditorMenu(hostOf(schema.node("doc", null, [paragraph("正文")])));
+    expect(submenuOf(plain, "menu.table")).toBeUndefined();
+
+    const inside = buildEditorMenu(hostOf(tableDoc(), inTableCell));
+    const ids = menuItems(submenuOf(inside, "menu.table")!).map((item) => item.id);
+
+    expect(ids).toEqual([
+      "table.rowBefore",
+      "table.rowAfter",
+      "table.colBefore",
+      "table.colAfter",
+      "table.moveRowUp",
+      "table.moveRowDown",
+      "table.moveColLeft",
+      "table.moveColRight",
+      "table.deleteRow",
+      "table.deleteCol",
+      "table.delete",
+    ]);
+  });
+
+  it("offers no move that would leave the table", () => {
+    // One cell: there is neither another row nor another column to move into.
+    const entries = buildEditorMenu(hostOf(tableDoc(), inTableCell));
+    const moves = menuItems(submenuOf(entries, "menu.table")!).filter((item) =>
+      item.id.startsWith("table.move"),
+    );
+
+    expect(moves.map((item) => item.disabled)).toEqual([true, true, true, true]);
+  });
+
+  it("enables the moves that have somewhere to go", () => {
+    // Middle of a 3×3: every direction is available.
+    const middle = grid(3, 3, { row: 1, col: 1 });
+    const entries = buildEditorMenu(
+      hostOf(middle.doc, (doc) => TextSelection.create(doc, middle.caret)),
+    );
+    const moves = menuItems(submenuOf(entries, "menu.table")!).filter((item) =>
+      item.id.startsWith("table.move"),
+    );
+
+    expect(moves.map((item) => item.disabled)).toEqual([false, false, false, false]);
+  });
+
+  it("greys out only the moves the caret cannot make", () => {
+    // Bottom-left corner: up and right are possible, down and left are not.
+    const corner = grid(3, 3, { row: 2, col: 0 });
+    const entries = buildEditorMenu(
+      hostOf(corner.doc, (doc) => TextSelection.create(doc, corner.caret)),
+    );
+    const moves = menuItems(submenuOf(entries, "menu.table")!).filter((item) =>
+      item.id.startsWith("table.move"),
+    );
+
+    expect(moves.map((item) => [item.id, item.disabled])).toEqual([
+      ["table.moveRowUp", false],
+      ["table.moveRowDown", true],
+      ["table.moveColLeft", true],
+      ["table.moveColRight", false],
+    ]);
+  });
+
+  it("marks the column's alignment inside a table", () => {
+    // Inside a table the alignment rows drive the column, so they stay usable and
+    // report the cell's own alignment even though no block can be moved.
+    const entries = buildEditorMenu(hostOf(tableDoc("right"), inTableCell));
+    const align = rowOf(entries, "menu.align");
+
+    expect(align.map((item) => item.disabled)).toEqual([false, false, false]);
+    expect(align.filter((item) => item.selected).map((item) => item.label)).toEqual(["右对齐"]);
+  });
+
+  it("runs a table row without throwing", () => {
+    const host = hostOf(tableDoc(), inTableCell);
+    const items = menuItems(submenuOf(buildEditorMenu(host), "menu.table")!);
+
+    for (const item of items) {
+      expect(() => item.run?.(), `${item.id} 抛了`).not.toThrow();
+    }
   });
 
   it("runs an alignment row without throwing", () => {

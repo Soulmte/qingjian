@@ -518,6 +518,8 @@ export const APP_COMMANDS: AppCommand[] = [
     accel: { key: "q", mod: true },
     run: async () => {
       await useWorkspace.getState().flushSave();
+      // 设置在改动后会等一会儿才落盘，退出前把它补上。
+      useSettings.getState().flushWrites();
       await getCurrentWindow().close();
     },
   },

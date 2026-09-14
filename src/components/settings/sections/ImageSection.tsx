@@ -320,7 +320,7 @@ export function ImageSection() {
             min={30}
             max={100}
             onChange={setImageMaxWidth}
-            format={(value) => `${value}%`}
+            unit="%"
           />
         </SettingRow>
       </SettingGroup>

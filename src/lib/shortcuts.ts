@@ -119,8 +119,11 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { chords: ["Ctrl+Shift+]"], description: "无序列表", note: "也可用 * + 空格" },
       { chords: ["Ctrl+Shift+["], description: "有序列表", note: "也可用 数字 + . + 空格" },
       { chords: ["Ctrl+Shift+X"], description: "任务列表（插入 - [ ]）" },
-      { chords: ["Tab"], description: "缩进（列表内）" },
-      { chords: ["Shift+Tab"], description: "取消缩进（列表内）" },
+      {
+        chords: ["Tab"],
+        description: "缩进（列表内）；表格内跳到下一格，最后一格再加一行",
+      },
+      { chords: ["Shift+Tab"], description: "取消缩进（列表内）；表格内跳到上一格" },
       {
         chords: ["Ctrl+Shift+E"],
         description: "居中对齐",

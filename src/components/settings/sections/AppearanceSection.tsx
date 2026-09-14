@@ -56,6 +56,7 @@ export function AppearanceSection() {
   const [accent, setAccent] = useSetting("accent");
   const [uiFont, setUiFont] = useSetting("uiFont");
   const [radius, setRadius] = useSetting("radius");
+  const [zoom, setZoom] = useSetting("zoom");
 
   const fonts = useSystemFonts();
 
@@ -146,7 +147,23 @@ export function AppearanceSection() {
             min={8}
             max={20}
             onChange={setRadius}
-            format={(value) => `${value} px`}
+            unit="px"
+          />
+        </SettingRow>
+        {/* The slider is in percent because that is how people describe a zoom;
+            the setting stores the ratio the webview wants. */}
+        <SettingRow
+          label="界面缩放"
+          hint="正文与界面一起缩放；快捷键 Ctrl+Shift+= / Ctrl+Shift+-，Ctrl+Shift+0 复位"
+        >
+          <RangeField
+            ariaLabel="界面缩放"
+            value={Math.round(zoom * 100)}
+            min={60}
+            max={160}
+            step={5}
+            onChange={(value) => setZoom(value / 100)}
+            unit="%"
           />
         </SettingRow>
       </SettingGroup>

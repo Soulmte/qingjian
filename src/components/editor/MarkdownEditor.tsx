@@ -1,7 +1,9 @@
 import { editorViewCtx } from "@milkdown/kit/core";
+import { remarkGFMPlugin } from "@milkdown/kit/preset/gfm";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { insert } from "@milkdown/kit/utils";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
+import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import "@milkdown/crepe/theme/common/style.css";
 import { useEffect, useRef, useState } from "react";
 
@@ -27,6 +29,7 @@ import {
 } from "@/lib/editor/bridge";
 import { buildEditorMenu } from "@/lib/editor/editor-menu";
 import { focusModePlugin } from "@/lib/editor/focus-mode";
+import { normaliseTableBreaks } from "@/lib/editor/table-markdown";
 import { parseFrontMatter, withFrontMatter } from "@/lib/front-matter";
 import { EDITOR_PLACEHOLDER, editorLabels } from "@/lib/editor/locale";
 import { searchPlugin } from "@/lib/editor/search";
@@ -104,6 +107,15 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
     ].join("|"),
   );
 
+  /**
+   * Bumped when the buffer was replaced from disk instead of typed.
+   *
+   * Part of the rebuild key for the same reason as `editorConfigKey`: Crepe reads
+   * its text once, at construction, so a reload only reaches the screen through a
+   * new instance.
+   */
+  const contentEpoch = useWorkspace((state) => state.contentEpoch);
+
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -114,8 +126,26 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
     // delimiters as a rule and its keys as a heading.
     const initialContent = parseFrontMatter(useWorkspace.getState().content).body;
     let disposed = false;
+    /**
+     * The last document this instance reported, seeded with what it was built
+     * from.
+     *
+     * A rebuild — which is how a reload from disk reaches the screen — re-emits
+     * the text it was just built with. Pushing that back would mark the note dirty
+     * and write the user's file again, in our serialisation, moments after they
+     * saved it in another editor. Nothing is lost by ignoring it: the store holds
+     * that exact text already, and any real edit changes it.
+     */
+    let lastMarkdown = initialContent;
 
     const scroller = host.closest(".editor-scroll");
+
+    // A reload from disk rebuilds this editor (see `contentEpoch`). The host is
+    // empty while that happens, and the scroll container answers an empty
+    // document by clamping its position to the top — so the reader's place is
+    // taken now and put back once the text is in. Coming back to the app after
+    // editing the file elsewhere should not also lose where you were.
+    const keepScroll = scroller instanceof HTMLElement ? scroller.scrollTop : 0;
 
     const centerIfTypewriter = (immediate = false) => {
       if (!useSettings.getState().settings.typewriterMode) return;
@@ -143,6 +173,27 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
     });
 
     crepe.editor
+      // Serialising back is not byte-for-byte, and the default shows it: every `-`
+      // bullet comes back as `*`, so a note edited here and then opened anywhere
+      // else looks rewritten. Pinned back to the character people type.
+      .config((ctx) => {
+        ctx.update(remarkStringifyOptionsCtx, (options) => ({
+          ...options,
+          bullet: "-" as const,
+        }));
+
+        // Table layout is a `remark-gfm` option, not a stringify one, because the
+        // serializer only pads a column when `remark-gfm` handed it the extension
+        // configured that way — setting it on the stringify options is silently
+        // ignored (which is why the old `tablePipeAlign: false` there did
+        // nothing). Off, a row reads `| 甲 | 短 |` instead of being stretched to
+        // the widest cell in its column, and the delimiter row collapses to
+        // `| - |`. Cell padding stays on so each cell keeps its single space.
+        ctx.update(remarkGFMPlugin.options.key, () => ({
+          tablePipeAlign: false,
+          tableCellPadding: true,
+        }));
+      })
       // Typora-compatible chords, in addition to the presets' own bindings.
       .use(typoraKeymap.ctx)
       .use(typoraKeymap.shortcuts)
@@ -166,10 +217,13 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
         if (disposed) return;
+        if (markdown === lastMarkdown) return;
+        lastMarkdown = markdown;
+
         // The block is re-read rather than captured: the metadata dialog can
         // replace it while this editor instance stays mounted.
         const { raw } = parseFrontMatter(useWorkspace.getState().content);
-        onChangeRef.current(withFrontMatter(raw, markdown));
+        onChangeRef.current(withFrontMatter(raw, normaliseTableBreaks(markdown)));
       });
 
       listener.mounted(() => notifyEditorChanged());
@@ -219,6 +273,17 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
         ?.setAttribute("spellcheck", String(settings.spellCheck));
 
       centerIfTypewriter(true);
+
+      if (keepScroll > 0 && scroller instanceof HTMLElement) {
+        // Two frames: Crepe's mount is asynchronous, and the document has to have
+        // its height back before the position can be restored.
+        requestAnimationFrame(() => {
+          if (disposed) return;
+          requestAnimationFrame(() => {
+            if (!disposed) scroller.scrollTop = keepScroll;
+          });
+        });
+      }
     });
 
     /** Writes the image into the workspace and optionally references it. */
@@ -317,7 +382,7 @@ export function MarkdownEditor({ noteId, onChange }: MarkdownEditorProps) {
       // Destroying before `create` settles throws; wait for it first.
       void ready.then(() => crepe.destroy()).catch(() => undefined);
     };
-  }, [noteId, editorConfigKey]);
+  }, [noteId, editorConfigKey, contentEpoch]);
 
   // Toggling these does not require rebuilding the editor.
   useEffect(() => {

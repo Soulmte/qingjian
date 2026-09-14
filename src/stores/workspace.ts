@@ -40,6 +40,15 @@ interface WorkspaceState {
    * noticed instead of being overwritten by a buffer that never saw it.
    */
   diskHash: string | null;
+  /**
+   * Counts the times `content` was replaced from disk rather than typed.
+   *
+   * The rich-text editor builds itself once from `content` and never re-reads the
+   * store, so a reload has to be signalled: the editor watches this and rebuilds
+   * on a change. Without it the buffer was reloaded while the screen kept showing
+   * the old text — and the next keystroke wrote that stale text back.
+   */
+  contentEpoch: number;
 
   saveState: SaveState;
   loading: boolean;
@@ -115,12 +124,24 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
   const enqueueSave = (): Promise<void> => {
     saveChain = saveChain.then(async () => {
-      const { activeNoteId, content } = get();
-      if (activeNoteId === null) return;
+      const { activeNoteId, content, contentLoaded, saveState } = get();
+      if (activeNoteId === null || !contentLoaded) return;
 
       // A conflict has to be answered before anything is written; retrying it on
       // every keystroke would only keep raising the same one.
-      if (get().saveState === "conflict") return;
+      if (saveState === "conflict") return;
+
+      /**
+       * Nothing to write unless there is something to write.
+       *
+       * This runs on every blur, not just after an edit, so writing
+       * unconditionally meant touching — and reformatting — a note that had only
+       * been opened: the editor's serialisation of a document is not
+       * byte-identical to the file it came from, so switching to another program
+       * and back silently rewrote it. `error` is included on purpose: a failed
+       * write should get another go rather than staying stuck.
+       */
+      if (saveState !== "dirty" && saveState !== "error") return;
 
       set({ saveState: "saving" });
       try {
@@ -201,6 +222,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     content: "",
     contentLoaded: false,
     diskHash: null,
+    contentEpoch: 0,
     saveState: "idle",
     loading: false,
     error: null,
@@ -377,6 +399,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
           content: detail.content,
           contentLoaded: true,
           diskHash: detail.hash,
+          // Tells the editor to take the new text; see `contentEpoch`.
+          contentEpoch: state.contentEpoch + 1,
           saveState: "saved",
           error: null,
           notes: state.notes.map((item) =>

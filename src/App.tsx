@@ -57,6 +57,8 @@ export default function App() {
   const flushSave = useWorkspace((state) => state.flushSave);
   const notes = useWorkspace((state) => state.notes);
   const activeNoteId = useWorkspace((state) => state.activeNoteId);
+  const activeWorkspaceId = useWorkspace((state) => state.activeWorkspaceId);
+  const rescan = useWorkspace((state) => state.rescan);
   const saveState = useWorkspace((state) => state.saveState);
   const checkExternalChange = useWorkspace((state) => state.checkExternalChange);
   const reloadFromDisk = useWorkspace((state) => state.reloadFromDisk);
@@ -115,7 +117,7 @@ export default function App() {
       // 从 store 现读设置，因为上面那次 await 之后 loadSettings 才刚写完值。
       if (!useSettings.getState().settings.autoCheckUpdate) return;
       try {
-        const found = await checkForUpdates();
+        const found = await checkForUpdates(useSettings.getState().settings.updateProxy);
         useSettings.getState().update("lastUpdateCheck", new Date().toISOString());
         if (found) {
           setPendingUpdate(found);
@@ -194,7 +196,11 @@ export default function App() {
     };
 
     // Leaving the window is the last reliable moment to persist the buffer.
-    const onBlur = () => void flushSave();
+    const onBlur = () => {
+      void flushSave();
+      // A settings change made a moment ago may still be waiting to be written.
+      useSettings.getState().flushWrites();
+    };
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("blur", onBlur);
@@ -205,18 +211,59 @@ export default function App() {
   }, [flushSave]);
 
   /**
+   * Watches the folder as well as the note.
+   *
+   * A note added, renamed or deleted in another program has to show up in the
+   * tree on its own. The fingerprint is a directory walk on the Rust side — no
+   * note is read — so polling it is cheap, and the reindex it triggers only runs
+   * when the tree really moved.
+   *
+   * The first answer is only recorded: a workspace that was just opened has
+   * already been indexed by `init`.
+   */
+  useEffect(() => {
+    if (activeWorkspaceId === null) return;
+
+    let seen: string | null = null;
+
+    const check = async () => {
+      try {
+        const signature = await api.workspaceSignature(activeWorkspaceId);
+        if (seen === null) {
+          seen = signature;
+          return;
+        }
+        if (signature === seen) return;
+
+        seen = signature;
+        await rescan();
+      } catch {
+        // An unreadable folder is not worth interrupting the user over; the next
+        // tick tries again, and the sidebar keeps the tree it already has.
+      }
+    };
+
+    void check();
+    const timer = window.setInterval(check, 3000);
+    return () => window.clearInterval(timer);
+  }, [activeWorkspaceId, rescan]);
+
+  /**
    * Watches the open note for a write from another program.
    *
    * There is no file-system watcher: one hash of a file the app already has open
    * is enough to tell, and it needs no background thread. Regaining focus is
    * checked straight away because that is exactly when an edit made elsewhere has
-   * just happened; the timer covers a window that stayed in front the whole time.
+   * just happened — switching back from the other editor reloads at once. The
+   * timer is for a window that stayed in front the whole time, and is short
+   * enough to read as live without hashing the file more than a few times a
+   * second at worst.
    */
   useEffect(() => {
     const check = () => void checkExternalChange();
 
     window.addEventListener("focus", check);
-    const timer = window.setInterval(check, 5000);
+    const timer = window.setInterval(check, 2000);
     return () => {
       window.removeEventListener("focus", check);
       window.clearInterval(timer);

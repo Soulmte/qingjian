@@ -533,6 +533,20 @@ html.dark {
   line-height: var(--qj-line-height, 1.75);
 }
 
+/* 正文类块要显式再声明一次。
+
+   Crepe 的 `reset.css` 在 `p` 上写死了 `line-height: 1.5`，而变量是挂在编辑器根节点
+   上的：段落自己那条把继承来的值盖掉，于是「行高」调到 1.3 或 2.4 正文都毫无变化，
+   未决、引用、表格单元格却跟着变——同一篇里两种行距。标题不在列表里是故意的：
+   它们各自有一套按字号调过的紧凑比例（h1 是 1.19），套用正文行高会散掉。 */
+[data-qj-codebg] .milkdown .ProseMirror p,
+[data-qj-codebg] .milkdown .ProseMirror li,
+[data-qj-codebg] .milkdown .ProseMirror td,
+[data-qj-codebg] .milkdown .ProseMirror th,
+[data-qj-codebg] .milkdown .ProseMirror blockquote {
+  line-height: var(--qj-line-height, 1.75);
+}
+
 .milkdown .ProseMirror img {
   max-width: var(--qj-image-max-width, 100%);
   height: auto;

@@ -294,6 +294,24 @@ pub fn apply_line_ending(contents: &str, ending: LineEnding) -> String {
     }
 }
 
+/// A fingerprint of a workspace's layout: the Markdown files and folders it holds,
+/// in sorted order.
+///
+/// The sidebar polls this to notice notes added, renamed or removed in another
+/// program. Nothing inside the files is read — a poll is a directory walk — and
+/// the answer only changes when the tree does, so the full reindex runs only when
+/// there is something to reindex.
+///
+/// Content is deliberately left out: an edit to a note that is already listed
+/// does not change the tree, and the open note has its own hash check.
+pub fn workspace_signature(root: &Path) -> AppResult<String> {
+    let mut entries = scan_markdown(root)?;
+    // The trailing slash keeps a folder apart from a note of the same name.
+    entries.extend(scan_directories(root)?.into_iter().map(|dir| format!("{dir}/")));
+    entries.sort();
+    Ok(hash_content(&entries.join("\n")))
+}
+
 /// Lists every Markdown file under `root` as a forward-slash relative path,
 /// sorted so the sidebar order is stable across runs. Hidden entries are
 /// skipped, which also keeps `.git` and `.obsidian` out of the tree.
@@ -739,6 +757,34 @@ mod tests {
 
         let files = scan_markdown(&root).expect("scan");
         assert_eq!(files, vec!["docs/guide.md".to_string()]);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn workspace_signature_tracks_the_tree_and_ignores_content() {
+        let root = std::env::temp_dir().join(format!("qingjian-signature-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.md"), "# 甲\n").unwrap();
+
+        let first = workspace_signature(&root).expect("signature");
+        assert_eq!(first, workspace_signature(&root).expect("signature"), "稳定的输入应当得到同一个指纹");
+
+        // Editing a note does not change the tree, so the sidebar need not rescan.
+        std::fs::write(root.join("a.md"), "# 甲\n\n改过\n").unwrap();
+        assert_eq!(workspace_signature(&root).unwrap(), first);
+
+        // A new note, a removed note and a new folder each have to be noticed.
+        std::fs::write(root.join("b.md"), "# 乙\n").unwrap();
+        let with_second = workspace_signature(&root).unwrap();
+        assert_ne!(with_second, first);
+
+        std::fs::remove_file(root.join("b.md")).unwrap();
+        assert_eq!(workspace_signature(&root).unwrap(), first);
+
+        std::fs::create_dir_all(root.join("空文件夹")).unwrap();
+        assert_ne!(workspace_signature(&root).unwrap(), first);
 
         let _ = std::fs::remove_dir_all(&root);
     }

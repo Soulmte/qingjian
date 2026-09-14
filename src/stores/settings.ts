@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import { api, errorMessage } from "@/lib/api";
+import { SECTION_KEYS, type SettingsSection } from "@/lib/settings-sections";
 import type { AccentName, AppSettings, CodeBackgroundName, ThemeMode } from "@/types";
 
 export const defaultSettings: AppSettings = {
@@ -73,6 +74,7 @@ export const defaultSettings: AppSettings = {
 
   autoCheckUpdate: true,
   lastUpdateCheck: "",
+  updateProxy: "",
 };
 
 export const ACCENTS: AccentName[] = [
@@ -219,6 +221,7 @@ export function sanitizeSettings(raw: Record<string, unknown>): AppSettings {
     // 是有意义的值（「还没查过」），而 text() 恰好把空串当默认值返回。
     autoCheckUpdate: bool(raw.autoCheckUpdate, d.autoCheckUpdate),
     lastUpdateCheck: text(raw.lastUpdateCheck, "", 40),
+    updateProxy: text(raw.updateProxy, "", 200),
   };
 }
 
@@ -228,39 +231,123 @@ interface SettingsState {
   error: string | null;
   load: () => Promise<void>;
   update: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
+  /** Puts every setting back to its default. */
   reset: () => void;
+  /** Puts back only the settings one section owns. */
+  resetSection: (section: SettingsSection) => Promise<void>;
+  /** Writes whatever is still waiting; called on the way out. */
+  flushWrites: () => void;
 }
 
-export const useSettings = create<SettingsState>((set, get) => ({
-  settings: defaultSettings,
-  loaded: false,
-  error: null,
+/**
+ * How long a change waits before it is written.
+ *
+ * `update` fires on every step of a drag — dragging 正文宽度 from 560 to 1400 is
+ * hundreds of calls — and each one used to be an IPC round trip and a SQLite
+ * write. The value is applied to the app immediately either way; only the write
+ * waits, so the screen still follows the slider.
+ */
+const WRITE_DELAY = 400;
 
-  load: async () => {
-    try {
-      const raw = await api.loadSettings();
-      set({ settings: sanitizeSettings(raw), loaded: true, error: null });
-    } catch (error) {
-      // Falling back to defaults keeps the app usable; the error is surfaced
-      // so a broken database is not silently hidden.
-      set({ settings: defaultSettings, loaded: true, error: errorMessage(error) });
+/**
+ * Whether a key still holds its default.
+ *
+ * Compared as JSON rather than by identity: the six heading sizes are an array,
+ * and a copy that holds the same numbers is still the default.
+ */
+export function isAtDefault<K extends keyof AppSettings>(settings: AppSettings, key: K): boolean {
+  return JSON.stringify(settings[key]) === JSON.stringify(defaultSettings[key]);
+}
+
+/** Whether a section holds any value that is not the default one. */
+export function sectionChanged(settings: AppSettings, section: SettingsSection): boolean {
+  return SECTION_KEYS[section].some((key) =>
+    !isAtDefault(settings, key as keyof AppSettings),
+  );
+}
+
+export const useSettings = create<SettingsState>((set, get) => {
+  /**
+   * Writes waiting for the dust to settle, keyed so only the last value of a key
+   * is sent.
+   */
+  const pending = new Map<keyof AppSettings, unknown>();
+  let writeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushWrites = () => {
+    if (writeTimer !== null) {
+      clearTimeout(writeTimer);
+      writeTimer = null;
     }
-  },
+    for (const [key, value] of pending) void api.setSetting(key, value);
+    pending.clear();
+  };
 
-  update: (key, value) => {
-    set({ settings: { ...get().settings, [key]: value } });
-    void api.setSetting(key, value);
-  },
+  const scheduleWrite = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    pending.set(key, value);
+    if (writeTimer !== null) clearTimeout(writeTimer);
+    writeTimer = setTimeout(flushWrites, WRITE_DELAY);
+  };
 
-  reset: () => {
-    const current = get().settings;
-    set({ settings: defaultSettings });
-    // Persist every key, not just the ones that changed, so the database and
-    // the in-memory defaults cannot drift apart.
-    for (const key of Object.keys(defaultSettings) as (keyof AppSettings)[]) {
-      if (current[key] !== defaultSettings[key]) {
-        void api.setSetting(key, defaultSettings[key]);
+  /**
+   * A change made in the last `WRITE_DELAY` milliseconds has not reached SQLite
+   * yet. Quitting in that window would lose it, so the close path calls this.
+   */
+  const store: SettingsState = {
+    settings: defaultSettings,
+    loaded: false,
+    error: null,
+
+    load: async () => {
+      try {
+        const raw = await api.loadSettings();
+        set({ settings: sanitizeSettings(raw), loaded: true, error: null });
+      } catch (error) {
+        // Falling back to defaults keeps the app usable; the error is surfaced
+        // so a broken database is not silently hidden.
+        set({ settings: defaultSettings, loaded: true, error: errorMessage(error) });
       }
-    }
-  },
-}));
+    },
+
+    update: (key, value) => {
+      set({ settings: { ...get().settings, [key]: value } });
+      scheduleWrite(key, value);
+    },
+
+    reset: () => {
+      const current = get().settings;
+      set({ settings: defaultSettings });
+      // Persist every key, not just the ones that changed, so the database and
+      // the in-memory defaults cannot drift apart.
+      for (const key of Object.keys(defaultSettings) as (keyof AppSettings)[]) {
+        if (current[key] !== defaultSettings[key]) {
+          void api.setSetting(key, defaultSettings[key]);
+        }
+      }
+      // A write that was still waiting would otherwise land on top of the reset.
+      flushWrites();
+    },
+
+    /**
+     * Puts back one section, so undoing a mistyped export style no longer means
+     * clearing the image hosting configuration as well.
+     */
+    resetSection: async (section) => {
+      const current = get().settings;
+      const next = { ...current };
+      const writes: Promise<void>[] = [];
+
+      for (const key of SECTION_KEYS[section] as (keyof AppSettings)[]) {
+        next[key] = defaultSettings[key] as never;
+        if (!isAtDefault(current, key)) writes.push(api.setSetting(key, defaultSettings[key]));
+      }
+
+      set({ settings: next });
+      await Promise.all(writes);
+    },
+
+    flushWrites,
+  };
+
+  return store;
+});

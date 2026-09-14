@@ -30,6 +30,14 @@ export const api = {
     invoke<Workspace>("add_workspace", { rootPath }),
   removeWorkspace: (id: number) => invoke<void>("remove_workspace", { id }),
   syncWorkspace: (id: number) => invoke<Note[]>("sync_workspace", { id }),
+  /**
+   * A fingerprint of the workspace's layout: its Markdown files and folders.
+   *
+   * Changes when a note is added, renamed or removed outside the app, and not
+   * when one is edited — which is what the sidebar polls to know whether a
+   * reindex is worth running.
+   */
+  workspaceSignature: (id: number) => invoke<string>("workspace_signature", { id }),
   /** The workspace's subfolders, including empty ones. */
   listFolders: (id: number) => invoke<string[]>("list_folders", { id }),
   /** Creates a folder; `relDir` may be nested. Returns the normalised path. */

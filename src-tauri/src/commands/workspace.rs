@@ -121,6 +121,14 @@ pub async fn sync(pool: &SqlitePool, workspace_id: i64) -> AppResult<usize> {
     Ok(files.len())
 }
 
+/// The workspace's layout fingerprint, for the sidebar's poll. See
+/// [`services::workspace_signature`].
+#[tauri::command]
+pub async fn workspace_signature(state: State<'_, AppState>, id: i64) -> AppResult<String> {
+    let workspace = repo::fetch_workspace(&state.pool, id).await?;
+    services::workspace_signature(Path::new(&workspace.root_path))
+}
+
 /// The workspace's subfolders, so the sidebar can show the ones that hold no
 /// notes yet. An empty folder created from the context menu would otherwise
 /// vanish until something was put inside it.

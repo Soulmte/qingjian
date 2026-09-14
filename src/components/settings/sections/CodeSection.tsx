@@ -96,7 +96,7 @@ export function CodeSection() {
             min={11}
             max={20}
             onChange={setCodeFontSize}
-            format={(value) => `${value} px`}
+            unit="px"
           />
         </SettingRow>
         <SettingRow label="预览" stacked>

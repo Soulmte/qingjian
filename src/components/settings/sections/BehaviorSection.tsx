@@ -31,7 +31,7 @@ export function BehaviorSection() {
             max={3000}
             step={100}
             onChange={setAutoSaveDelay}
-            format={(value) => `${(value / 1000).toFixed(1)} s`}
+            unit="ms"
           />
         </SettingRow>
       </SettingGroup>
@@ -68,13 +68,16 @@ export function BehaviorSection() {
             max={420}
             step={4}
             onChange={setSidebarWidth}
-            format={(value) => `${value} px`}
+            unit="px"
           />
         </SettingRow>
       </SettingGroup>
 
       <SettingGroup title="重置">
-        <SettingRow label="恢复默认设置" hint="外观、编辑器与行为偏好回到初始值，笔记内容不受影响">
+        <SettingRow
+          label="恢复全部默认设置"
+          hint="外观、编辑器、代码、Markdown、图像（含图床仓库与分支）、导出与行为的每一项都回到初始值；只影响设置，笔记内容与已保存的访问令牌不受影响"
+        >
           <Button variant="outline" onPress={() => setIsResetOpen(true)}>
             恢复默认
           </Button>
@@ -84,9 +87,9 @@ export function BehaviorSection() {
       <ConfirmDialog
         isOpen={isResetOpen}
         onOpenChange={setIsResetOpen}
-        title="恢复默认设置？"
-        description="当前的外观、编辑器与行为偏好会被重置，笔记内容不受影响。"
-        confirmLabel="恢复默认"
+        title="恢复全部默认设置？"
+        description="外观、编辑器、代码、Markdown、图像（含图床仓库、分支与目录）、导出与行为的每一项都会被重置。笔记内容不受影响；访问令牌存在另一处，不会被清除。只想重置某一页时，用那一页右上角的「恢复本页默认」。"
+        confirmLabel="全部恢复默认"
         onConfirm={() => useSettings.getState().reset()}
       />
     </>

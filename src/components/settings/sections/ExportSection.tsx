@@ -1,3 +1,4 @@
+import { ExportPreview } from "@/components/settings/ExportPreview";
 import {
   FontPicker,
   RangeField,
@@ -96,6 +97,8 @@ export function ExportSection() {
 
   return (
     <>
+      <ExportPreview />
+
       <SettingGroup title="导出方式">
         <SettingRow
           label="默认格式"
@@ -144,7 +147,7 @@ export function ExportSection() {
               min={5}
               max={60}
               onChange={setMarginTop}
-              format={(value) => `${value} mm`}
+              unit="mm"
             />
             <RangeField
               ariaLabel="下边距"
@@ -152,7 +155,7 @@ export function ExportSection() {
               min={5}
               max={60}
               onChange={setMarginBottom}
-              format={(value) => `${value} mm`}
+              unit="mm"
             />
           </div>
         </SettingRow>
@@ -165,7 +168,7 @@ export function ExportSection() {
               min={5}
               max={60}
               onChange={setMarginLeft}
-              format={(value) => `${value} mm`}
+              unit="mm"
             />
             <RangeField
               ariaLabel="右边距"
@@ -173,7 +176,7 @@ export function ExportSection() {
               min={5}
               max={60}
               onChange={setMarginRight}
-              format={(value) => `${value} mm`}
+              unit="mm"
             />
           </div>
         </SettingRow>
@@ -197,7 +200,7 @@ export function ExportSection() {
             min={8}
             max={24}
             onChange={setBodyFontSize}
-            format={(value) => `${value} pt`}
+            unit="pt"
           />
         </SettingRow>
 
@@ -209,7 +212,7 @@ export function ExportSection() {
             max={2.6}
             step={0.05}
             onChange={setBodyLineHeight}
-            format={(value) => `${value.toFixed(2)} 倍`}
+            unit="倍"
           />
         </SettingRow>
       </SettingGroup>
@@ -254,7 +257,7 @@ export function ExportSection() {
             min={0}
             max={60}
             onChange={setHeadingSpaceBefore}
-            format={(value) => `${value} pt`}
+            unit="pt"
           />
         </SettingRow>
 
@@ -265,7 +268,7 @@ export function ExportSection() {
             min={0}
             max={60}
             onChange={setHeadingSpaceAfter}
-            format={(value) => `${value} pt`}
+            unit="pt"
           />
         </SettingRow>
       </SettingGroup>
@@ -289,7 +292,7 @@ export function ExportSection() {
             min={7}
             max={20}
             onChange={setCodeFontSize}
-            format={(value) => `${value} pt`}
+            unit="pt"
           />
         </SettingRow>
 
@@ -330,7 +333,7 @@ export function ExportSection() {
             min={20}
             max={100}
             onChange={setImageMaxWidth}
-            format={(value) => `${value}%`}
+            unit="%"
           />
         </SettingRow>
       </SettingGroup>

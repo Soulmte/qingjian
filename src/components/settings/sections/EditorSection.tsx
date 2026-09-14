@@ -33,10 +33,10 @@ export function EditorSection() {
             min={12}
             max={24}
             onChange={setFontSize}
-            format={(value) => `${value} px`}
+            unit="px"
           />
         </SettingRow>
-        <SettingRow label="行高">
+        <SettingRow label="行高" hint="作用于正文、列表、表格与引用；标题保留自己的紧凑行距">
           <RangeField
             ariaLabel="行高"
             value={lineHeight}
@@ -44,7 +44,7 @@ export function EditorSection() {
             max={2.4}
             step={0.05}
             onChange={setLineHeight}
-            format={(value) => value.toFixed(2)}
+            unit=""
           />
         </SettingRow>
         <SettingRow label="正文宽度" hint="书写区域的列宽上限，过大时换行会变得吃力">
@@ -55,7 +55,7 @@ export function EditorSection() {
             max={1400}
             step={20}
             onChange={setEditorWidth}
-            format={(value) => `${value} px`}
+            unit="px"
           />
         </SettingRow>
       </SettingGroup>

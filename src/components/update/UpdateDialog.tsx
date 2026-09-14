@@ -1,10 +1,11 @@
 import { Button, Modal } from "@heroui/react";
 
 import { ReleaseNotes } from "@/components/update/ReleaseNotes";
+import { UpdateProgress } from "@/components/update/UpdateProgress";
 import { useUpdateInstall } from "@/components/update/use-update-install";
 import { api } from "@/lib/api";
 import { GITHUB_URL } from "@/lib/project";
-import { formatBytes, formatReleaseTime, type Update } from "@/lib/update";
+import { formatReleaseTime, type Update } from "@/lib/update";
 
 const WARNING = "var(--qj-warning, #b45309)";
 
@@ -24,7 +25,8 @@ export function UpdateDialog({
   onOpenChange: (isOpen: boolean) => void;
   update: Update;
 }) {
-  const { phase, done, total, error, percent, download, installNow } = useUpdateInstall(update);
+  const { phase, done, total, speed, error, percent, download, installNow } =
+    useUpdateInstall(update);
 
   const published = formatReleaseTime(update.date);
   const busy = phase === "downloading" || phase === "installing";
@@ -56,22 +58,7 @@ export function UpdateDialog({
             )}
 
             {phase === "downloading" && (
-              <div className="mt-3">
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-default">
-                  <div
-                    className="h-full rounded-full transition-all duration-200"
-                    style={{
-                      width: percent === null ? "30%" : `${percent}%`,
-                      background: "var(--qj-accent)",
-                    }}
-                  />
-                </div>
-                <p className="mt-1.5 text-xs text-muted">
-                  {percent === null
-                    ? `正在下载${total > 0 ? ` · ${formatBytes(done)} / ${formatBytes(total)}` : "…"}`
-                    : `正在下载 ${percent}% · ${formatBytes(done)} / ${formatBytes(total)}`}
-                </p>
-              </div>
+              <UpdateProgress done={done} total={total} speed={speed} percent={percent} />
             )}
 
             {phase === "staged" && (

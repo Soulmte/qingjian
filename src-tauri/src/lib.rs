@@ -76,6 +76,7 @@ pub fn run() {
             commands::workspace::add_workspace,
             commands::workspace::remove_workspace,
             commands::workspace::sync_workspace,
+            commands::workspace::workspace_signature,
             commands::workspace::list_folders,
             commands::workspace::create_folder,
             commands::workspace::rename_folder,

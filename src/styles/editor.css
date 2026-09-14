@@ -41,10 +41,11 @@
   /* `--field` 在 HeroUI v3 里并不存在，行内代码底色一直解析失败。 */
   --crepe-color-inline-area: var(--default);
 
-  /* `--crepe-base-font-size` is used inside calc() for every scale step, so it
-   * must be a length. EditorPane overrides it with the user's font size.
-   * Font families and the code palette are defined in `theme.css`. */
-  --crepe-base-font-size: 16px;
+  /* 这里不能再声明 `--crepe-base-font-size`：自定义属性是继承来的，而写在本
+     元素上的声明会盖住上层传来的值——设置里的「字号」正是由 EditorPane 以行
+     内变量挂在 `.editor-column` 上，于是这个 16px 把字号设置一直按在 16px，
+     调到多大都看不出变化。Crepe 自己的规则已经带有 `, 16px` 兜底，这里不写
+     也安全。 */
 
   /* Previously `none`, which flattened every menu into the page. */
   --crepe-shadow-1: var(--qj-menu-shadow);
@@ -386,4 +387,152 @@
   .operation
   > .operation-item:hover {
   color: var(--accent);
+}
+
+/* ---------- 表格 ----------
+   Crepe 只给了表格一条 20% 透明度的描边和 4px 内边距：结构看不出、表头认不出、行也
+   跟不住。这里重画一版：整表一个圆角外框，内部只留发丝线，表头压一层很淡的强调色，
+   行悬停高亮，选中的单元格与列宽拖拽线都用强调色。内外边距沿用 reset.css 的节奏
+   （段落是 padding: 4px 0）。
+
+   手柄（行/列拖拽、加号、对齐按钮组）原本是胶囊形，和工具栏的小圆角语汇不一致，
+   一并改掉；prosemirror 自带的浅蓝拖拽线与浅蓝选区也一并换成主题色。 */
+
+.milkdown {
+  /* prosemirror 的 tables.css 会读这个变量给单元格兜底宽度，而 Crepe 从没定义过
+     它，于是新建表格里的空单元格会塔成一条线。 */
+  --default-cell-min-width: 3em;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block {
+  margin: 8px 0;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block table {
+  /* 分开的边框才能让圆角生效，否则四角的格线会露出直角。 */
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--qj-border-strong);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block th,
+[data-qj-codebg] .milkdown .milkdown-table-block td {
+  border: none;
+  border-right: 1px solid var(--separator);
+  border-bottom: 1px solid var(--separator);
+  padding: 8px 14px;
+}
+
+/* 最后一列和最后一行不画线：那一边已经由外框包住了。 */
+[data-qj-codebg] .milkdown .milkdown-table-block th:last-child,
+[data-qj-codebg] .milkdown .milkdown-table-block td:last-child {
+  border-right: none;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block tr:last-child th,
+[data-qj-codebg] .milkdown .milkdown-table-block tr:last-child td {
+  border-bottom: none;
+}
+
+/* 表头跟着强调色走，换主题时表格也跟着换。 */
+[data-qj-codebg] .milkdown .milkdown-table-block th {
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+  font-weight: 600;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block tr:hover td {
+  background: var(--qj-bg-hover);
+}
+
+/* prosemirror 给单元格选区铺的是一点浅蓝，Crepe 又叠了一层 40% 的淡色。 */
+[data-qj-codebg] .milkdown .milkdown-table-block .selectedCell::after {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+  opacity: 1;
+}
+
+/* 选中的单元格（单击整格选中）用内描边，比外描边不会被相邻格挡掉。 */
+[data-qj-codebg] .milkdown .milkdown-table-block th:has(.ProseMirror-selectednode),
+[data-qj-codebg] .milkdown .milkdown-table-block td:has(.ProseMirror-selectednode) {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* 列宽拖拽线：默认是 #adf，与主题无关的浅蓝。 */
+[data-qj-codebg] .milkdown .ProseMirror .column-resize-handle {
+  width: 2px;
+  background: var(--accent);
+}
+
+/* ---------- 表格：手柄 ----------
+   Crepe 把「加一行 / 加一列」的加号放在整条线的端点（横线在左端、竖线在顶端），
+   线本身是一条 1px 的强调色——既不好发现也不好点中，还把表格衬得很花。这里把加号
+   挪到线的正中间、放大成正方形并加上描边，线本身减淡。行/列拖拽手柄同样加宽，
+   方便抓住拖动。
+
+   尺寸不是随手写的：两个手柄里都是一个 16×16 的图标，Crepe 靠内边距把它撑开
+   （16 + 2×6 = 28），所以放大时两边的内边距要按新尺寸重新给足。 */
+
+[data-qj-codebg] .milkdown .milkdown-table-block .line-handle {
+  background: color-mix(in oklab, var(--accent) 45%, transparent);
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .line-handle .add-button {
+  width: 22px;
+  height: 22px;
+  padding: 3px;
+  border: 1px solid var(--qj-menu-border);
+  border-radius: 6px;
+  background: var(--qj-bg-elevated);
+  color: var(--qj-menu-icon);
+  box-shadow: var(--qj-menu-shadow);
+}
+
+/* 横线上的加号居中于表格宽度，竖线上的居中于表格高度。 */
+[data-qj-codebg]
+  .milkdown
+  .milkdown-table-block
+  .line-handle[data-role="x-line-drag-handle"]
+  .add-button {
+  left: 50%;
+}
+
+[data-qj-codebg]
+  .milkdown
+  .milkdown-table-block
+  .line-handle[data-role="y-line-drag-handle"]
+  .add-button {
+  top: 50%;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle {
+  border-radius: 6px;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle[data-role="col-drag-handle"] {
+  width: 34px;
+  height: 20px;
+  padding: 2px 9px;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle[data-role="row-drag-handle"] {
+  width: 20px;
+  height: 34px;
+  padding: 9px 2px;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle .button-group,
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle .button-group button {
+  border-radius: 6px;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle .button-group button:hover {
+  border-radius: 6px;
+}
+
+[data-qj-codebg] .milkdown .milkdown-table-block .cell-handle:hover,
+[data-qj-codebg] .milkdown .milkdown-table-block .line-handle .add-button:hover {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 45%, transparent);
 }

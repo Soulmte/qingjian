@@ -13,11 +13,31 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { insertTableCommand, toggleStrikethroughCommand } from "@milkdown/kit/preset/gfm";
+import {
+  addColAfterCommand,
+  addColBeforeCommand,
+  addRowAfterCommand,
+  addRowBeforeCommand,
+  deleteSelectedCellsCommand,
+  insertTableCommand,
+  moveColCommand,
+  moveRowCommand,
+  selectColCommand,
+  selectRowCommand,
+  toggleStrikethroughCommand,
+} from "@milkdown/kit/preset/gfm";
 import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  BetweenHorizontalEnd,
+  BetweenHorizontalStart,
+  BetweenVerticalEnd,
+  BetweenVerticalStart,
   Bold,
   BoxSelect,
   ClipboardCopy,
@@ -39,6 +59,9 @@ import {
   SquarePlus,
   Strikethrough,
   Table,
+  TableColumnsSplit,
+  TableRowsSplit,
+  Trash2,
   Undo2,
 } from "lucide-react";
 
@@ -56,6 +79,7 @@ import {
 } from "@/lib/editor/align-selection";
 import { applyAlignment, clearFormatting, type EditableHost } from "@/lib/editor/actions";
 import { runEditorCommand } from "@/lib/editor/bridge";
+import { deleteTable, caretCell } from "@/lib/editor/table";
 import { stripAlignment } from "@/lib/editor/image-align";
 import { buildNoteMenu } from "@/lib/note-menu";
 import { useWorkspace } from "@/stores/workspace";
@@ -164,6 +188,170 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
       view.focus();
     },
   };
+
+  // Everything the table can do without hunting for Crepe's hover handles: adding
+  // and deleting rows and columns, moving them, and dropping the whole table. The
+  // group only exists while the caret is in one, because every row acts on the
+  // cell the caret is in — and dragging a handle is the same operation done with
+  // the mouse, so the menu is where it is discoverable (and where it can be done
+  // when the handle is hard to hit).
+  const cell = caretCell(state);
+  const tableItems: ContextMenuEntry[] = cell
+    ? [
+        {
+          id: "menu.table",
+          label: "表格",
+          icon: <Table />,
+          submenu: [
+            {
+              row: [
+                {
+                  id: "table.rowBefore",
+                  label: "上方插入行",
+                  icon: <BetweenHorizontalStart />,
+                  run: () => {
+                    runEditorCommand(addRowBeforeCommand.key);
+                    view.focus();
+                  },
+                },
+                {
+                  id: "table.rowAfter",
+                  label: "下方插入行",
+                  icon: <BetweenHorizontalEnd />,
+                  run: () => {
+                    runEditorCommand(addRowAfterCommand.key);
+                    view.focus();
+                  },
+                },
+              ],
+            },
+            {
+              row: [
+                {
+                  id: "table.colBefore",
+                  label: "左侧插入列",
+                  icon: <BetweenVerticalStart />,
+                  run: () => {
+                    runEditorCommand(addColBeforeCommand.key);
+                    view.focus();
+                  },
+                },
+                {
+                  id: "table.colAfter",
+                  label: "右侧插入列",
+                  icon: <BetweenVerticalEnd />,
+                  run: () => {
+                    runEditorCommand(addColAfterCommand.key);
+                    view.focus();
+                  },
+                },
+              ],
+            },
+            {
+              row: [
+                {
+                  id: "table.moveRowUp",
+                  label: "上移一行",
+                  icon: <ArrowUp />,
+                  disabled: cell.row === 0,
+                  run: () => {
+                    // The commands take the destination index, so moving up is
+                    // simply one less than the row the caret is on.
+                    runEditorCommand(moveRowCommand.key, {
+                      from: cell.row,
+                      to: cell.row - 1,
+                    });
+                    view.focus();
+                  },
+                },
+                {
+                  id: "table.moveRowDown",
+                  label: "下移一行",
+                  icon: <ArrowDown />,
+                  disabled: cell.row === cell.rows - 1,
+                  run: () => {
+                    runEditorCommand(moveRowCommand.key, {
+                      from: cell.row,
+                      to: cell.row + 1,
+                    });
+                    view.focus();
+                  },
+                },
+              ],
+            },
+            {
+              row: [
+                {
+                  id: "table.moveColLeft",
+                  label: "左移一列",
+                  icon: <ArrowLeft />,
+                  disabled: cell.col === 0,
+                  run: () => {
+                    runEditorCommand(moveColCommand.key, {
+                      from: cell.col,
+                      to: cell.col - 1,
+                    });
+                    view.focus();
+                  },
+                },
+                {
+                  id: "table.moveColRight",
+                  label: "右移一列",
+                  icon: <ArrowRight />,
+                  disabled: cell.col === cell.cols - 1,
+                  run: () => {
+                    runEditorCommand(moveColCommand.key, {
+                      from: cell.col,
+                      to: cell.col + 1,
+                    });
+                    view.focus();
+                  },
+                },
+              ],
+            },
+            {
+              row: [
+                {
+                  id: "table.deleteRow",
+                  label: "删除本行",
+                  description: "删除光标所在的一行",
+                  icon: <TableRowsSplit />,
+                  // GFM deletes a whole row by selecting it and then removing the
+                  // selected cells; there is no single command for it.
+                  run: () => {
+                    runEditorCommand(selectRowCommand.key);
+                    runEditorCommand(deleteSelectedCellsCommand.key);
+                    view.focus();
+                  },
+                },
+                {
+                  id: "table.deleteCol",
+                  label: "删除本列",
+                  description: "删除光标所在的一列",
+                  icon: <TableColumnsSplit />,
+                  run: () => {
+                    runEditorCommand(selectColCommand.key);
+                    runEditorCommand(deleteSelectedCellsCommand.key);
+                    view.focus();
+                  },
+                },
+              ],
+            },
+            {
+              id: "table.delete",
+              label: "删除表格",
+              icon: <Trash2 />,
+              danger: true,
+              run: () => {
+                const transaction = deleteTable(view.state);
+                if (transaction) view.dispatch(transaction);
+                view.focus();
+              },
+            },
+          ],
+        },
+      ]
+    : [];
 
   const entries: ContextMenuEntry[] = [
     undoItem,
@@ -288,6 +476,8 @@ export function buildEditorMenu(view: EditorMenuHost): ContextMenuEntry[] {
         },
       ],
     },
+
+    ...tableItems,
 
     {
       id: "menu.insert",

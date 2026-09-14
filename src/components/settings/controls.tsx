@@ -41,6 +41,8 @@ export function SettingRow({
 }) {
   return (
     <div
+      // The settings search jumps here by this name; see SettingsDialog.
+      data-setting-label={label}
       className={cn(
         "border-b border-border/50 px-3.5 py-2.5 last:border-b-0",
         stacked ? "flex flex-col gap-2.5" : "flex flex-wrap items-center justify-between gap-3",
@@ -148,7 +150,7 @@ export function RangeField({
   max,
   step = 1,
   onChange,
-  format,
+  unit,
   ariaLabel,
 }: {
   value: number;
@@ -156,11 +158,33 @@ export function RangeField({
   max: number;
   step?: number;
   onChange: (value: number) => void;
-  format?: (value: number) => string;
+  /** Suffix shown after the number, e.g. `px`. */
+  unit?: string;
   ariaLabel: string;
 }) {
+  /** What is being typed, until it is committed. `null` means "show the value". */
+  const [draft, setDraft] = useState<string | null>(null);
+
+  /**
+   * Applies a typed value, snapped to the slider's own steps.
+   *
+   * Typing is the only way to reach a value the slider would make you hunt for
+   * (760 → 780 px in one go), so it is worth the few lines of normalising: a
+   * value that is off-grid would be rounded by the slider the moment it moved.
+   */
+  const commit = (raw: string) => {
+    setDraft(null);
+    const parsed = Number(raw.replace(/[^\d.-]/g, ""));
+    if (!Number.isFinite(parsed)) return;
+
+    const snapped = min + Math.round((parsed - min) / step) * step;
+    const clamped = Math.min(max, Math.max(min, snapped));
+    // Two decimals is enough for the smallest step in use (0.05).
+    onChange(Number(clamped.toFixed(2)));
+  };
+
   return (
-    <div className="flex w-52 items-center gap-3">
+    <div className="flex w-60 items-center gap-3">
       <input
         type="range"
         aria-label={ariaLabel}
@@ -172,8 +196,30 @@ export function RangeField({
         className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-default"
         style={{ accentColor: "var(--qj-accent)" }}
       />
-      <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted">
-        {format ? format(value) : value}
+
+      <span className="flex w-20 shrink-0 items-center justify-end gap-1">
+        <input
+          type="number"
+          aria-label={`${ariaLabel}（数值）`}
+          className="field qj-range-value"
+          value={draft ?? value}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={(event) => commit(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              commit(event.currentTarget.value);
+              event.currentTarget.blur();
+              return;
+            }
+            // Escape gives up on the edit, which needs the box to stop showing
+            // the half-typed number.
+            if (event.key === "Escape") setDraft(null);
+          }}
+        />
+        {unit && <span className="text-xs text-muted">{unit}</span>}
       </span>
     </div>
   );

@@ -1,12 +1,15 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useState } from "react";
 
-import { SettingGroup, SettingRow, Toggle } from "@/components/settings/controls";
+import { SettingGroup, SettingRow, TextField, Toggle } from "@/components/settings/controls";
 import { useSetting } from "@/components/settings/use-setting";
 import { ReleaseNotes } from "@/components/update/ReleaseNotes";
+import { UpdateProgress } from "@/components/update/UpdateProgress";
 import { useUpdateInstall } from "@/components/update/use-update-install";
-import { errorMessage } from "@/lib/api";
-import { checkForUpdates, formatBytes, formatReleaseTime, type Update } from "@/lib/update";
+import { api, errorMessage } from "@/lib/api";
+import { mirrorReleaseUrl } from "@/lib/project";
+import { checkForUpdates, formatReleaseTime, type Update } from "@/lib/update";
+import { useSettings } from "@/stores/settings";
 
 /** 与设置里其它警告文字同色。 */
 const WARNING = "var(--qj-warning, #b45309)";
@@ -22,6 +25,7 @@ const WARNING = "var(--qj-warning, #b45309)";
 export function UpdateSection() {
   const [autoCheck, setAutoCheck] = useSetting("autoCheckUpdate");
   const [lastCheck, setLastCheck] = useSetting("lastUpdateCheck");
+  const [proxy, setProxy] = useSetting("updateProxy");
 
   const [version, setVersion] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,7 +33,7 @@ export function UpdateSection() {
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
 
-  const { phase, done, total, error, percent, download, installNow, reset } =
+  const { phase, done, total, speed, error, percent, download, installNow, reset } =
     useUpdateInstall(update);
 
   useEffect(() => {
@@ -44,7 +48,7 @@ export function UpdateSection() {
     setChecked(false);
     reset();
     try {
-      const found = await checkForUpdates();
+      const found = await checkForUpdates(useSettings.getState().settings.updateProxy);
       setUpdate(found);
       setChecked(true);
       setLastCheck(new Date().toISOString());
@@ -67,6 +71,20 @@ export function UpdateSection() {
         </SettingRow>
         <SettingRow label="启动时自动检查" hint="每次启动查一次，有新版本时弹窗提示。">
           <Toggle checked={autoCheck} onChange={setAutoCheck} ariaLabel="启动时自动检查更新" />
+        </SettingRow>
+      </SettingGroup>
+
+      <SettingGroup title="网络">
+        <SettingRow
+          label="下载代理"
+          hint="形如 http://127.0.0.1:7890；留空则直连。只作用于青简自己的更新请求（检查与下载都走它），安装前仍会校验签名"
+        >
+          <TextField
+            ariaLabel="下载代理"
+            value={proxy}
+            onChange={setProxy}
+            placeholder="http://127.0.0.1:7890"
+          />
         </SettingRow>
       </SettingGroup>
 
@@ -135,11 +153,12 @@ export function UpdateSection() {
               )}
 
               {phase === "downloading" && (
-                <span className="min-w-0 flex-1 text-xs text-muted">
-                  {percent === null
-                    ? `正在下载${total > 0 ? ` · ${formatBytes(done)} / ${formatBytes(total)}` : "…"}`
-                    : `正在下载 ${percent}% · ${formatBytes(done)} / ${formatBytes(total)}`}
-                </span>
+                <UpdateProgress
+                  done={done}
+                  total={total}
+                  speed={speed}
+                  percent={percent}
+                />
               )}
 
               {phase === "staged" && (
@@ -170,7 +189,19 @@ export function UpdateSection() {
       )}
 
       <p className="text-xs text-muted">
-        青简从 GitHub Releases 取更新，安装前会校验签名——只有用发布者私钥签过名的包才会被装上。
+        {`青简从 GitHub Releases 取更新，安装前会校验签名——只有用发布者私钥签过名的包才会被装上。`}
+        {update && (
+          <>
+            {" "}
+            <button
+              type="button"
+              className="qj-text-btn"
+              onClick={() => void api.openExternal(mirrorReleaseUrl(update.version))}
+            >
+              下载很慢？从镜像手动下载
+            </button>
+          </>
+        )}
       </p>
     </>
   );

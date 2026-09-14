@@ -195,4 +195,12 @@ export interface AppSettings {
   autoCheckUpdate: boolean;
   /** 上次检查的时间，ISO 字符串；空串表示从未检查过。 */
   lastUpdateCheck: string;
+  /**
+   * 下载更新时走的代理，形如 `http://127.0.0.1:7890`；空串表示直连。
+   *
+   * 只有这一条运行时能改的旋钮：GitHub 的安装包在国内经常只有几十 KB/s，
+   * 而 Tauri 的更新器会把这里填的代理同时用在检查与下载上（签名校验不变，
+   * 代理既不能改包也不能绕过验签）。
+   */
+  updateProxy: string;
 }
